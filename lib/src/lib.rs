@@ -25,3 +25,12 @@ pub const MAX_INPUTS: usize = 6;
 
 // We limit to MAX_INPUT because kaspa script can only make limited number of intropsection calls.
 pub type PrevOutsType = [Option<PrevOut>; MAX_INPUTS];
+
+#[derive(Serialize, Deserialize)]
+pub struct Output {
+    pub script_pub_key: Vec<u8>,
+}
+
+pub const MAX_OUTPUTS: usize = 6;
+
+pub type OutputsType = [Option<Output>; MAX_OUTPUTS];

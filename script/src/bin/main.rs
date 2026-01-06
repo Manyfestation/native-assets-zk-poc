@@ -11,7 +11,7 @@
 //! ```
 
 use clap::Parser;
-use fibonacci_lib::{PayloadState, PrevOut, PrevOutsType, TokenOutput};
+use fibonacci_lib::{Output, OutputsType, PayloadState, PrevOut, PrevOutsType, TokenOutput};
 use sp1_sdk::{include_elf, ProverClient, SP1Stdin};
 
 /// The ELF (executable and linkable format) file for the Succinct RISC-V zkVM.
@@ -79,6 +79,23 @@ fn main() {
 
     let current_input_idx: usize = 0;
     let current_input_sig: Vec<u8> = vec![0u8; 64]; // Dummy signature
+    let outs: OutputsType = [
+        Some(Output {
+            script_pub_key: vec![99u8; 100],
+        }),
+        Some(Output {
+            script_pub_key: vec![99u8; 100],
+        }),
+        Some(Output {
+            script_pub_key: vec![99u8; 100],
+        }),
+        Some(Output {
+            script_pub_key: vec![99u8; 100],
+        }),
+        None,
+        None,
+    ];
+    let current_utxo_script_pub_key = vec![99u8; 100];
     let next_state = PayloadState {
         outs: vec![
             TokenOutput {
@@ -97,6 +114,8 @@ fn main() {
     stdin.write(&prev_outs);
     stdin.write(&current_input_idx);
     stdin.write(&current_input_sig);
+    stdin.write(&outs);
+    stdin.write(&current_utxo_script_pub_key);
     stdin.write(&next_state);
 
     if args.execute {

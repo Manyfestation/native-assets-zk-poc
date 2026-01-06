@@ -8,7 +8,7 @@
 #![no_main]
 sp1_zkvm::entrypoint!(main);
 
-use fibonacci_lib::{PayloadState, PrevOut, PrevOutsType, PubKey, TxId};
+use fibonacci_lib::{Output, OutputsType, PayloadState, PrevOut, PrevOutsType, PubKey, TxId};
 
 struct SignatureMessage {
     _prev_out_idx: usize,
@@ -23,8 +23,11 @@ pub fn main() {
     let prev_outs = sp1_zkvm::io::read::<PrevOutsType>();
     let current_input_idx = sp1_zkvm::io::read::<usize>();
     let current_input_sig = sp1_zkvm::io::read::<Vec<u8>>();
+    let outs = sp1_zkvm::io::read::<OutputsType>();
+    let current_utxo_script_pub_key = sp1_zkvm::io::read::<Vec<u8>>();
     let next_state = sp1_zkvm::io::read::<PayloadState>();
 
+    let outs = outs.into_iter().flatten().collect::<Vec<Output>>();
     let prev_outs = prev_outs.into_iter().flatten().collect::<Vec<PrevOut>>();
 
     let total_in = prev_outs
@@ -36,6 +39,14 @@ pub fn main() {
         .iter()
         .map(|output| output.amount)
         .sum::<u64>();
+
+    // TODO: We can maybe make this the wallet guarantee. If it's violated the tokens will be effectively burn.
+    assert!(
+        outs.iter()
+            .all(|out| out.script_pub_key == current_utxo_script_pub_key),
+        "The UTXO should be spent to the same covenant"
+    );
+    // Here we only check parent relation, and assume the upper covenant checks the grandparent relation.
 
     assert_eq!(total_in, total_out, "Input and output totals must match");
 
