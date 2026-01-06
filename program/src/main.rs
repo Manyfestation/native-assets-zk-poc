@@ -8,20 +8,28 @@
 #![no_main]
 sp1_zkvm::entrypoint!(main);
 
-use fibonacci_lib::PayloadState;
+use fibonacci_lib::{PayloadState, PrevOut, PrevOutsType, PubKey, TxId};
+
+struct SignatureMessage {
+    _prev_out_idx: usize,
+    _prev_out_tx_id: TxId,
+}
+
+fn check_sig(_sig: Vec<u8>, _pub_key: &PubKey, _msg: SignatureMessage) -> bool {
+    true
+}
 
 pub fn main() {
-    // Read an input to the program.
-    //
-    // Behind the scenes, this compiles down to a custom system call which handles reading inputs
-    // from the prover.
-    let prev_state = sp1_zkvm::io::read::<PayloadState>();
+    let prev_outs = sp1_zkvm::io::read::<PrevOutsType>();
+    let current_input_idx = sp1_zkvm::io::read::<usize>();
+    let current_input_sig = sp1_zkvm::io::read::<Vec<u8>>();
     let next_state = sp1_zkvm::io::read::<PayloadState>();
 
-    let total_in = prev_state
-        .outs
+    let prev_outs = prev_outs.into_iter().flatten().collect::<Vec<PrevOut>>();
+
+    let total_in = prev_outs
         .iter()
-        .map(|output| output.amount)
+        .map(|prev| prev.state.outs[prev.idx].amount)
         .sum::<u64>();
     let total_out = next_state
         .outs
@@ -29,23 +37,23 @@ pub fn main() {
         .map(|output| output.amount)
         .sum::<u64>();
 
-    let success = total_in == total_out;
-    sp1_zkvm::io::commit(&success);
-    // assert_eq!(total_in, total_out, "Input and output totals must match");
+    assert_eq!(total_in, total_out, "Input and output totals must match");
 
-    // // Read an input to the program.
-    // //
-    // // Behind the scenes, this compiles down to a custom system call which handles reading inputs
-    // // from the prover.
-    // let n = sp1_zkvm::io::read::<u32>();
+    let current_prev_out = &prev_outs[current_input_idx];
+    let current_pub_key = &current_prev_out.state.outs[current_prev_out.idx].pub_key;
 
-    // // Compute the n'th fibonacci number using a function from the workspace lib crate.
-    // let (a, b) = fibonacci(n);
+    let prev_out_tx_id = current_prev_out.txid.unwrap();
 
-    // // Encode the public values of the program.
-    // let bytes = PublicValuesStruct::abi_encode(&PublicValuesStruct { n, a, b });
-
-    // // Commit to the public values of the program. The final proof will have a commitment to all the
-    // // bytes that were committed to.
-    // sp1_zkvm::io::commit_slice(&bytes);
+    // We only validate the signature of the current input, since we assume the other inputs will make the same check.
+    assert!(
+        check_sig(
+            current_input_sig,
+            current_pub_key,
+            SignatureMessage {
+                _prev_out_idx: current_prev_out.idx,
+                _prev_out_tx_id: prev_out_tx_id,
+            }
+        ),
+        "Invalid signature"
+    );
 }

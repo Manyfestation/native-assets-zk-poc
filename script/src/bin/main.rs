@@ -11,7 +11,7 @@
 //! ```
 
 use clap::Parser;
-use fibonacci_lib::{PayloadState, PubKey, TokenOutput};
+use fibonacci_lib::{PayloadState, PrevOut, PrevOutsType, TokenOutput};
 use sp1_sdk::{include_elf, ProverClient, SP1Stdin};
 
 /// The ELF (executable and linkable format) file for the Succinct RISC-V zkVM.
@@ -26,9 +26,6 @@ struct Args {
 
     #[arg(long)]
     prove: bool,
-
-    #[arg(long, default_value = "20")]
-    n: u32,
 }
 
 fn main() {
@@ -47,46 +44,65 @@ fn main() {
     // Setup the prover client.
     let client = ProverClient::from_env();
 
-    let prev_state = PayloadState {
-        outs: vec![
-            TokenOutput {
-                pub_key: PubKey([0u8; 32]),
-                amount: 100,
+    let prev_outs: PrevOutsType = [
+        Some(PrevOut {
+            idx: 1,
+            txid: Some([5u8; 32]),
+            state: PayloadState {
+                outs: vec![
+                    TokenOutput {
+                        pub_key: [0u8; 32],
+                        amount: 50,
+                    },
+                    TokenOutput {
+                        pub_key: [1u8; 32],
+                        amount: 100,
+                    },
+                ],
             },
-            TokenOutput {
-                pub_key: PubKey([1u8; 32]),
-                amount: 50,
+        }),
+        Some(PrevOut {
+            idx: 0,
+            txid: None,
+            state: PayloadState {
+                outs: vec![TokenOutput {
+                    pub_key: [1u8; 32],
+                    amount: 50,
+                }],
             },
-        ],
-    };
+        }),
+        None,
+        None,
+        None,
+        None,
+    ];
+
+    let current_input_idx: usize = 0;
+    let current_input_sig: Vec<u8> = vec![0u8; 64]; // Dummy signature
     let next_state = PayloadState {
         outs: vec![
             TokenOutput {
-                pub_key: PubKey([0u8; 32]),
-                amount: 100,
+                pub_key: [0u8; 32],
+                amount: 80,
             },
             TokenOutput {
-                pub_key: PubKey([1u8; 32]),
-                amount: 50,
+                pub_key: [1u8; 32],
+                amount: 70,
             },
         ],
     };
 
     // Setup the inputs.
     let mut stdin = SP1Stdin::new();
-    stdin.write(&prev_state);
+    stdin.write(&prev_outs);
+    stdin.write(&current_input_idx);
+    stdin.write(&current_input_sig);
     stdin.write(&next_state);
-
-    println!("n: {}", args.n);
 
     if args.execute {
         // Execute the program
-        let (mut output, report) = client.execute(FIBONACCI_ELF, &stdin).run().unwrap();
+        let (_output, report) = client.execute(FIBONACCI_ELF, &stdin).run().unwrap();
         println!("Program executed successfully.");
-
-        // Read the output.
-        let success = output.read::<bool>();
-        println!("Success: {}", success);
 
         // Record the number of cycles executed.
         println!("Number of cycles: {}", report.total_instruction_count());

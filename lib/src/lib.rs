@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Hash, Eq, PartialEq)]
-pub struct PubKey(pub [u8; 32]);
+pub type PubKey = [u8; 32];
+pub type TxId = [u8; 32];
 
 #[derive(Serialize, Deserialize, Hash, Eq, PartialEq)]
 pub struct TokenOutput {
@@ -13,3 +13,15 @@ pub struct TokenOutput {
 pub struct PayloadState {
     pub outs: Vec<TokenOutput>,
 }
+
+#[derive(Serialize, Deserialize)]
+pub struct PrevOut {
+    pub idx: usize,
+    pub txid: Option<TxId>, // Only the current input's prevout needs to have a txid.
+    pub state: PayloadState,
+}
+
+pub const MAX_INPUTS: usize = 6;
+
+// We limit to MAX_INPUT because kaspa script can only make limited number of intropsection calls.
+pub type PrevOutsType = [Option<PrevOut>; MAX_INPUTS];
