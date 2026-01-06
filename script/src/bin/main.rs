@@ -51,25 +51,27 @@ fn main() {
             state: PayloadState {
                 outs: vec![
                     TokenOutput {
-                        pub_key: [0u8; 32],
+                        script_pub_key: vec![0u8; 32],
                         amount: 50,
                     },
                     TokenOutput {
-                        pub_key: [1u8; 32],
+                        script_pub_key: vec![1u8; 32],
                         amount: 100,
                     },
                 ],
             },
+            script_pub_key: vec![99u8; 100],
         }),
         Some(PrevOut {
             idx: 0,
             txid: None,
             state: PayloadState {
                 outs: vec![TokenOutput {
-                    pub_key: [1u8; 32],
+                    script_pub_key: vec![1u8; 32],
                     amount: 50,
                 }],
             },
+            script_pub_key: vec![99u8; 100],
         }),
         None,
         None,
@@ -95,15 +97,14 @@ fn main() {
         None,
         None,
     ];
-    let current_utxo_script_pub_key = vec![99u8; 100];
     let next_state = PayloadState {
         outs: vec![
             TokenOutput {
-                pub_key: [0u8; 32],
+                script_pub_key: vec![0u8; 32],
                 amount: 80,
             },
             TokenOutput {
-                pub_key: [1u8; 32],
+                script_pub_key: vec![1u8; 32],
                 amount: 70,
             },
         ],
@@ -115,7 +116,6 @@ fn main() {
     stdin.write(&current_input_idx);
     stdin.write(&current_input_sig);
     stdin.write(&outs);
-    stdin.write(&current_utxo_script_pub_key);
     stdin.write(&next_state);
 
     if args.execute {

@@ -8,28 +8,22 @@
 #![no_main]
 sp1_zkvm::entrypoint!(main);
 
-use fibonacci_lib::{Output, OutputsType, PayloadState, PrevOut, PrevOutsType, PubKey, TxId};
+use fibonacci_lib::{Output, OutputsType, PayloadState, PrevOut, PrevOutsType, TxId};
 
 struct SignatureMessage {
     _prev_out_idx: usize,
     _prev_out_tx_id: TxId,
 }
 
-fn check_sig(_sig: Vec<u8>, _pub_key: &PubKey, _msg: SignatureMessage) -> bool {
+fn check_sig(_sig: Vec<u8>, _pub_key: &[u8], _msg: SignatureMessage) -> bool {
     true
 }
 
-pub fn main() {
-    let prev_outs = sp1_zkvm::io::read::<PrevOutsType>();
-    let current_input_idx = sp1_zkvm::io::read::<usize>();
-    let current_input_sig = sp1_zkvm::io::read::<Vec<u8>>();
-    let outs = sp1_zkvm::io::read::<OutputsType>();
-    let current_utxo_script_pub_key = sp1_zkvm::io::read::<Vec<u8>>();
-    let next_state = sp1_zkvm::io::read::<PayloadState>();
+fn extract_pub_key_from_script_pub_key(_script_pub_key: &[u8]) -> Option<Vec<u8>> {
+    Some(vec![])
+}
 
-    let outs = outs.into_iter().flatten().collect::<Vec<Output>>();
-    let prev_outs = prev_outs.into_iter().flatten().collect::<Vec<PrevOut>>();
-
+fn balance_check(prev_outs: &[PrevOut], next_state: &PayloadState) {
     let total_in = prev_outs
         .iter()
         .map(|prev| prev.state.outs[prev.idx].amount)
@@ -40,31 +34,69 @@ pub fn main() {
         .map(|output| output.amount)
         .sum::<u64>();
 
-    // TODO: We can maybe make this the wallet guarantee. If it's violated the tokens will be effectively burn.
+    assert_eq!(total_in, total_out, "Input and output totals must match");
+}
+
+fn check_spend_to_same_covenant(
+    outs: &[Output],
+    current_utxo_script_pub_key: &[u8],
+    num_token_outs: usize,
+) {
+    // TODO: We can maybe make this the wallet guarantee. If it's violated the tokens will be effectively burned.
     assert!(
         outs.iter()
+            .take(num_token_outs) // Only the outputs that are preserved to the tokens have to be spent to the same covenant. Other outputs can be used freely (e.g. for change).
             .all(|out| out.script_pub_key == current_utxo_script_pub_key),
         "The UTXO should be spent to the same covenant"
     );
-    // Here we only check parent relation, and assume the upper covenant checks the grandparent relation.
+    // Here we only check the covenant rule is kept forward, and we assume the upper covenant checks recursively it's going backward (using the grandparent).
+}
 
-    assert_eq!(total_in, total_out, "Input and output totals must match");
+fn check_p2sh_spend(prev_outs: &[PrevOut], current_token_spk: &[u8]) {
+    // We check that there's an input that spends a UTXO with the same script pub key as the current UTXO.
+    assert!(
+        prev_outs
+            .iter()
+            .any(|prev| { prev.script_pub_key == *current_token_spk }),
+        "P2SH spending requires an input that spends the same script pub key as the current UTXO"
+    );
+}
+
+pub fn main() {
+    let prev_outs = sp1_zkvm::io::read::<PrevOutsType>();
+    let current_input_idx = sp1_zkvm::io::read::<usize>();
+    let current_input_sig = sp1_zkvm::io::read::<Vec<u8>>();
+    let outs = sp1_zkvm::io::read::<OutputsType>();
+    let next_state = sp1_zkvm::io::read::<PayloadState>();
+
+    let outs = outs.into_iter().flatten().collect::<Vec<Output>>();
+    let prev_outs = prev_outs.into_iter().flatten().collect::<Vec<PrevOut>>();
+
+    balance_check(&prev_outs, &next_state);
 
     let current_prev_out = &prev_outs[current_input_idx];
-    let current_pub_key = &current_prev_out.state.outs[current_prev_out.idx].pub_key;
+    let current_utxo_script_pub_key = &current_prev_out.script_pub_key;
+
+    check_spend_to_same_covenant(&outs, current_utxo_script_pub_key, next_state.outs.len());
+
+    let current_token_spk = &current_prev_out.state.outs[current_prev_out.idx].script_pub_key;
 
     let prev_out_tx_id = current_prev_out.txid.unwrap();
 
     // We only validate the signature of the current input, since we assume the other inputs will make the same check.
-    assert!(
-        check_sig(
-            current_input_sig,
-            current_pub_key,
-            SignatureMessage {
-                _prev_out_idx: current_prev_out.idx,
-                _prev_out_tx_id: prev_out_tx_id,
-            }
-        ),
-        "Invalid signature"
-    );
+    if let Some(pub_key) = extract_pub_key_from_script_pub_key(current_token_spk) {
+        assert!(
+            check_sig(
+                current_input_sig,
+                &pub_key,
+                SignatureMessage {
+                    _prev_out_idx: current_prev_out.idx,
+                    _prev_out_tx_id: prev_out_tx_id,
+                }
+            ),
+            "Invalid signature"
+        );
+    } else {
+        check_p2sh_spend(&prev_outs, current_token_spk);
+    }
 }

@@ -1,11 +1,10 @@
 use serde::{Deserialize, Serialize};
 
-pub type PubKey = [u8; 32];
 pub type TxId = [u8; 32];
 
 #[derive(Serialize, Deserialize, Hash, Eq, PartialEq)]
 pub struct TokenOutput {
-    pub pub_key: PubKey,
+    pub script_pub_key: Vec<u8>,
     pub amount: u64,
 }
 
@@ -18,6 +17,7 @@ pub struct PayloadState {
 pub struct PrevOut {
     pub idx: usize,
     pub txid: Option<TxId>, // Only the current input's prevout needs to have a txid.
+    pub script_pub_key: Vec<u8>,
     pub state: PayloadState,
 }
 
