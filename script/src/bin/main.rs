@@ -10,9 +10,8 @@
 //! RUST_LOG=info cargo run --release -- --prove
 //! ```
 
-use alloy_sol_types::SolType;
 use clap::Parser;
-use fibonacci_lib::PublicValuesStruct;
+use fibonacci_lib::{PayloadState, PubKey, TokenOutput};
 use sp1_sdk::{include_elf, ProverClient, SP1Stdin};
 
 /// The ELF (executable and linkable format) file for the Succinct RISC-V zkVM.
@@ -48,28 +47,46 @@ fn main() {
     // Setup the prover client.
     let client = ProverClient::from_env();
 
+    let prev_state = PayloadState {
+        outs: vec![
+            TokenOutput {
+                pub_key: PubKey([0u8; 32]),
+                amount: 100,
+            },
+            TokenOutput {
+                pub_key: PubKey([1u8; 32]),
+                amount: 50,
+            },
+        ],
+    };
+    let next_state = PayloadState {
+        outs: vec![
+            TokenOutput {
+                pub_key: PubKey([0u8; 32]),
+                amount: 100,
+            },
+            TokenOutput {
+                pub_key: PubKey([1u8; 32]),
+                amount: 50,
+            },
+        ],
+    };
+
     // Setup the inputs.
     let mut stdin = SP1Stdin::new();
-    stdin.write(&args.n);
+    stdin.write(&prev_state);
+    stdin.write(&next_state);
 
     println!("n: {}", args.n);
 
     if args.execute {
         // Execute the program
-        let (output, report) = client.execute(FIBONACCI_ELF, &stdin).run().unwrap();
+        let (mut output, report) = client.execute(FIBONACCI_ELF, &stdin).run().unwrap();
         println!("Program executed successfully.");
 
         // Read the output.
-        let decoded = PublicValuesStruct::abi_decode(output.as_slice()).unwrap();
-        let PublicValuesStruct { n, a, b } = decoded;
-        println!("n: {}", n);
-        println!("a: {}", a);
-        println!("b: {}", b);
-
-        let (expected_a, expected_b) = fibonacci_lib::fibonacci(n);
-        assert_eq!(a, expected_a);
-        assert_eq!(b, expected_b);
-        println!("Values are correct!");
+        let success = output.read::<bool>();
+        println!("Success: {}", success);
 
         // Record the number of cycles executed.
         println!("Number of cycles: {}", report.total_instruction_count());

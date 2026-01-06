@@ -8,23 +8,44 @@
 #![no_main]
 sp1_zkvm::entrypoint!(main);
 
-use alloy_sol_types::SolType;
-use fibonacci_lib::{fibonacci, PublicValuesStruct};
+use fibonacci_lib::PayloadState;
 
 pub fn main() {
     // Read an input to the program.
     //
     // Behind the scenes, this compiles down to a custom system call which handles reading inputs
     // from the prover.
-    let n = sp1_zkvm::io::read::<u32>();
+    let prev_state = sp1_zkvm::io::read::<PayloadState>();
+    let next_state = sp1_zkvm::io::read::<PayloadState>();
 
-    // Compute the n'th fibonacci number using a function from the workspace lib crate.
-    let (a, b) = fibonacci(n);
+    let total_in = prev_state
+        .outs
+        .iter()
+        .map(|output| output.amount)
+        .sum::<u64>();
+    let total_out = next_state
+        .outs
+        .iter()
+        .map(|output| output.amount)
+        .sum::<u64>();
 
-    // Encode the public values of the program.
-    let bytes = PublicValuesStruct::abi_encode(&PublicValuesStruct { n, a, b });
+    let success = total_in == total_out;
+    sp1_zkvm::io::commit(&success);
+    // assert_eq!(total_in, total_out, "Input and output totals must match");
 
-    // Commit to the public values of the program. The final proof will have a commitment to all the
-    // bytes that were committed to.
-    sp1_zkvm::io::commit_slice(&bytes);
+    // // Read an input to the program.
+    // //
+    // // Behind the scenes, this compiles down to a custom system call which handles reading inputs
+    // // from the prover.
+    // let n = sp1_zkvm::io::read::<u32>();
+
+    // // Compute the n'th fibonacci number using a function from the workspace lib crate.
+    // let (a, b) = fibonacci(n);
+
+    // // Encode the public values of the program.
+    // let bytes = PublicValuesStruct::abi_encode(&PublicValuesStruct { n, a, b });
+
+    // // Commit to the public values of the program. The final proof will have a commitment to all the
+    // // bytes that were committed to.
+    // sp1_zkvm::io::commit_slice(&bytes);
 }
