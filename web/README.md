@@ -1,46 +1,35 @@
-# ZK Native Token POC
+# ZK Native Token PoC
 
-This project demonstrates a zk native token transfer system using Circom and Groth16 (via snarkjs).
+**Zero-knowledge token transfers on UTXO chains** — proving balance conservation and covenant preservation without revealing transaction details.
 
-## Prerequisites
-- Nodejs
-- **Circom Binary**: Required for compiling circuits.
+## What This Does
 
-### Circom Installation
-For convenience, this project includes pre-downloaded Circom binaries in the `bin/` directory for Windows, Linux and Mac.
+1. **Balance Check**: `sum(inputs) === sum(outputs)` — no tokens created or destroyed
+2. **Covenant Check**: Output scripts must match the spending input's script — tokens stay in the covenant
+3. **Range Check**: All amounts are valid (no underflow attacks)
 
-The build scripts will automatically detect your OS and use the appropriate local binary.If you need to manually install it, see the [official instructions](https://docs.circom.io/getting-started/installation/). 
+The server only verifies the ZK proof — it never sees the transaction logic.
 
-## Project Structure
-- `src/`: Client-side logic (React/Vite)
-- `server/`: Express backend acting as the blockchain/sequencer
-- `circuits/`: Circom circuit definitions (symlinked or copied)
-- `scripts/`: Scripts for local Circom/Snarkjs playground (not needed for the web application)
+## Usage
 
-## Setup
-
-Install dependencies:
 ```bash
+cd web
 npm install
-```
-
-## Development
-
-```bash
 npm run dev
 ```
 
+Open http://localhost:5173
 
-## Circuits
+## Circuit
 
-The circuit artifacts (wasm, zkey, vkey) are currently committed in `public/circuits` for ease of use.
+See [`circuits/native_token.circom`](circuits/native_token.circom) — the entire token logic .
 
-If you modify `circuits/native_token.circom`, you must recompile:
+To recompile after changes:
 ```bash
-npm run compile:circuit
+npm run compile:circuit && npm run setup
 ```
 
-To run the trusted setup ceremony (Phase 2) again:
-```bash
-npm run setup
-```
+## Stack
+- **Circom** — circuit language
+- **snarkjs** — Groth16 prover/verifier
+- **Vite + Express** — web app
