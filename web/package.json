@@ -1,0 +1,24 @@
+{
+    "name": "zk-native-asset-dashboard",
+    "version": "1.0.0",
+    "description": "ZK Native Token Transfer Dashboard",
+    "type": "module",
+    "scripts": {
+        "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+        "dev:client": "vite",
+        "dev:server": "node server/index.js",
+        "start": "node server/index.js",
+        "build": "vite build",
+        "compile:circuit": "node scripts/compile-circuit.js",
+        "setup": "node scripts/trusted-setup.js"
+    },
+    "dependencies": {
+        "cors": "^2.8.5",
+        "express": "^4.18.2",
+        "snarkjs": "^0.7.6"
+    },
+    "devDependencies": {
+        "concurrently": "^8.2.2",
+        "vite": "^5.0.0"
+    }
+}

@@ -1,89 +1,59 @@
-# SP1 Project Template
+# Native Assets ZK PoC (Circom)
 
-This is a template for creating an end-to-end [SP1](https://github.com/succinctlabs/sp1) project
-that can generate a proof of any RISC-V program.
+This project is a **Proof of Concept (PoC)** implementation of native asset verification logic using **Circom** Zero-Knowledge circuits.
 
-## Requirements
+## Overview
 
-- [Rust](https://rustup.rs/)
-- [SP1](https://docs.succinct.xyz/docs/sp1/getting-started/install)
+This repository originally explored using SP1 (Rust-based ZK) but has been migrated to **Circom** for circuit definition. The goal is to verify asset covenants and native token rules (e.g., balances, supplies) within a ZK proof.
 
-## Running the Project
+Current status: **Hello World / Infrastructure Setup**
+- The core circuit infrastructure is set up in `circuits/`.
+- A basic "Hello World" circuit (`main.circom`) is in place to verify the environment.
 
-There are 3 main ways to run this project: execute a program, generate a core proof, and
-generate an EVM-compatible proof.
+## Prerequisites
 
-### Build the Program
+To built and run this project, you need:
 
-The program is automatically built through `script/build.rs` when the script is built.
+1.  **Node.js** & **npm**: Standard JavaScript runtime.
+2.  **Rust** (optional): For installing Circom from source.
+3.  **Circom**: The circuit compiler.
+    - [Install Circom](https://docs.circom.io/getting-started/installation/)
+4.  **snarkjs**: Tool to generate and verify ZK proofs.
+    - `npm install -g snarkjs`
 
-### Execute the Program
+## Project Structure
 
-To run the program without generating a proof:
+- `circuits/`: Contains the Circom circuit definitions and npm scripts.
+- `reference/`: Contains the old Rust implementation for logic reference.
 
-```sh
-cd script
-cargo run --release -- --execute
-```
+## Getting Started
 
-This will execute the program and display the output.
+1.  **Navigate to the circuits directory:**
+    ```bash
+    cd circuits
+    ```
 
-### Generate an SP1 Core Proof
+2.  **Install dependencies:**
+    ```bash
+    npm install
+    ```
 
-To generate an SP1 [core proof](https://docs.succinct.xyz/docs/sp1/generating-proofs/proof-types#core-default) for your program:
+3.  **Compile the Circuit:**
+    Use the provided script to compile `main.circom`.
+    ```bash
+    # (Update with actual command from package.json if available, or manual)
+    # Example manual compilation:
+    circom main.circom --r1cs --wasm --sym --c --output .
+    ```
+    *(Note: Check `circuits/package.json` for helper scripts)*
 
-```sh
-cd script
-cargo run --release -- --prove
-```
+## Development Workflow
 
-### Generate an EVM-Compatible Proof
+1.  Modify `circuits/main.circom`.
+2.  Compile using Circom.
+3.  Generate a witness using the generated WASM/C++ code.
+4.  Generate a proof using `snarkjs`.
 
-> [!WARNING]
-> You will need at least 16GB RAM to generate a Groth16 or PLONK proof. View the [SP1 docs](https://docs.succinct.xyz/docs/sp1/getting-started/hardware-requirements#local-proving) for more information.
+## Reference
 
-Generating a proof that is cheap to verify on the EVM (e.g. Groth16 or PLONK) is more intensive than generating a core proof.
-
-To generate a Groth16 proof:
-
-```sh
-cd script
-cargo run --release --bin evm -- --system groth16
-```
-
-To generate a PLONK proof:
-
-```sh
-cargo run --release --bin evm -- --system plonk
-```
-
-These commands will also generate fixtures that can be used to test the verification of SP1 proofs
-inside Solidity.
-
-### Retrieve the Verification Key
-
-To retrieve your `programVKey` for your on-chain contract, run the following command in `script`:
-
-```sh
-cargo run --release --bin vkey
-```
-
-## Using the Prover Network
-
-We highly recommend using the [Succinct Prover Network](https://docs.succinct.xyz/docs/network/introduction) for any non-trivial programs or benchmarking purposes. For more information, see the [key setup guide](https://docs.succinct.xyz/docs/network/developers/key-setup) to get started.
-
-To get started, copy the example environment file:
-
-```sh
-cp .env.example .env
-```
-
-Then, set the `SP1_PROVER` environment variable to `network` and set the `NETWORK_PRIVATE_KEY`
-environment variable to your whitelisted private key.
-
-For example, to generate an EVM-compatible proof using the prover network, run the following
-command:
-
-```sh
-SP1_PROVER=network NETWORK_PRIVATE_KEY=... cargo run --release --bin evm
-```
+See `REFACTORING_GUIDE.md` for details on the architecture and migration plan from the simplified Rust model to Circom constraints.

@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZK Native Token Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- Token Drawer (Left Sidebar) -->
+        <aside class="token-drawer" id="token-drawer">
+            <div class="drawer-header">
+                <h2>Tokens</h2>
+                <button class="btn btn-small" id="btn-deploy">+ Deploy</button>
+            </div>
+            <div class="token-list" id="token-list">
+                <!-- Tokens will be populated here -->
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-container">
+            <div class="container">
+                <!-- Header -->
+                <header class="header">
+                    <h1>ZK Native Token Dashboard</h1>
+                    <p class="subtitle">Circom Circuit | Groth16 SNARK | Proof Generation & Verification</p>
+                </header>
+
+                <!-- Top Section: Ledger + Metrics + Transfer -->
+                <section class="top-section">
+                    <!-- Ledger -->
+                    <div class="panel ledger-panel">
+                        <h2>Token Ledger <span class="token-badge" id="current-token-name">Default Token</span></h2>
+                        <div class="ledger-content" id="ledger">
+                            <div class="ledger-row">
+                                <div class="wallet-info-row">
+                                    <span class="wallet-label server">Server</span>
+                                    <span class="wallet-addr" id="server-address">0x01020304...</span>
+                                </div>
+                                <span class="balance" id="server-balance">1000</span>
+                            </div>
+                            <div class="ledger-row user-row" id="user-row" style="display: none;">
+                                <div class="wallet-info-row">
+                                    <span class="wallet-label user">You</span>
+                                    <span class="wallet-addr" id="wallet-address"></span>
+                                </div>
+                                <span class="balance" id="user-balance">0</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Metrics -->
+                    <div class="panel metrics-panel">
+                        <h2>Metrics</h2>
+                        <div class="metrics-grid">
+                            <div class="metric">
+                                <span class="metric-label">Proof Time (Client)</span>
+                                <span class="metric-value" id="metric-prove-time">--</span>
+                            </div>
+                            <div class="metric">
+                                <span class="metric-label">Verify Time (Server)</span>
+                                <span class="metric-value" id="metric-verify-time">--</span>
+                            </div>
+                            <div class="metric">
+                                <span class="metric-label">Proof Size</span>
+                                <span class="metric-value" id="metric-proof-size">--</span>
+                            </div>
+                            <div class="metric">
+                                <span class="metric-label">ZKey Size</span>
+                                <span class="metric-value" id="metric-zkey-size">--</span>
+                            </div>
+                        </div>
+                        <div class="download-section">
+                            <a href="#" id="download-proof" class="download-link" style="display: none;">Download
+                                Proof</a>
+                            <a href="/circuits/verification_key.json" class="download-link" target="_blank">Download
+                                VKey</a>
+                        </div>
+                    </div>
+
+                    <!-- Transfer Form -->
+                    <div class="panel transfer-panel">
+                        <h2>Transfer</h2>
+                        <div class="setup-status" id="setup-status">
+                            <span class="status-indicator" id="status-indicator"></span>
+                            <span id="status-text">Checking...</span>
+                        </div>
+                        <div class="form-group">
+                            <label for="amount">Amount</label>
+                            <input type="number" id="amount" value="100" min="1" max="1000">
+                        </div>
+                        <div class="button-group">
+                            <button id="btn-receive" class="btn btn-primary" disabled>Receive</button>
+                            <button id="btn-send" class="btn btn-secondary" disabled>Send</button>
+                        </div>
+                        <!-- Removed Verify Button -->
+                        <button id="btn-reset" class="btn btn-ghost">Reset</button>
+                    </div>
+                </section>
+
+                <!-- Bottom: Logs -->
+                <section class="panel terminal-panel">
+                    <h2>Logs</h2>
+                    <div class="terminal" id="terminal">
+                        <div class="terminal-line">[SYSTEM] ZK Native Token Dashboard initialized</div>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <!-- Deploy Token Modal -->
+    <div class="modal-overlay" id="deploy-modal" style="display: none;">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Deploy New Token</h3>
+                <button class="modal-close" id="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="token-name">Token Name</label>
+                    <input type="text" id="token-name" placeholder="e.g. MyToken">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" id="modal-cancel">Cancel</button>
+                <button class="btn btn-primary" id="modal-deploy">Deploy Token</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- snarkjs from CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/snarkjs@0.7.6/build/snarkjs.min.js"></script>
+    <script type="module" src="main.js"></script>
+</body>
+
+</html>

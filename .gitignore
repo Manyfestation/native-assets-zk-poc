@@ -21,15 +21,8 @@ pgo-data.profdata
 .vscode
 
 # Local binaries
-circom-*
+# circom-* (Uncomment if you want to ignore local binaries, but keeping them for PoC)
 
 # Node
 **/node_modules
-
-# Circom Artifacts
-**/*.r1cs
-**/*.sym
-**/*.wtns
-**/*.ptau
-**/*_js
-**/witness.json
+**/dist

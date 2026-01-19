@@ -9,6 +9,7 @@
     "verify": "snarkjs groth16 verify verification_key.json public.json proof.json"
   },
   "dependencies": {
-    "circomlib": "^2.0.5"
+    "circomlib": "^2.0.5",
+    "snarkjs": "^0.7.6"
   }
 }
