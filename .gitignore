@@ -19,3 +19,17 @@ pgo-data.profdata
 .env
 
 .vscode
+
+# Local binaries
+circom-*
+
+# Node
+**/node_modules
+
+# Circom Artifacts
+**/*.r1cs
+**/*.sym
+**/*.wtns
+**/*.ptau
+**/*_js
+**/witness.json

@@ -1,0 +1,14 @@
+{
+  "name": "native-asset-circuit",
+  "version": "1.0.0",
+  "description": "Native Asset ZK Circuit in Circom",
+  "scripts": {
+    "compile": "circom main.circom --r1cs --wasm --sym -o build",
+    "setup": "snarkjs groth16 setup build/main.r1cs pot12_final.ptau build/main_0000.zkey",
+    "prove": "snarkjs groth16 prove build/main_0000.zkey build/main_js/witness.wtns proof.json public.json",
+    "verify": "snarkjs groth16 verify verification_key.json public.json proof.json"
+  },
+  "dependencies": {
+    "circomlib": "^2.0.5"
+  }
+}
