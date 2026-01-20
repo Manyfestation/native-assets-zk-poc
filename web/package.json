@@ -13,6 +13,7 @@
         "setup": "node scripts/trusted-setup.js"
     },
     "dependencies": {
+        "circomlib": "^2.0.5",
         "circomlibjs": "^0.1.7",
         "cors": "^2.8.5",
         "express": "^4.18.2",

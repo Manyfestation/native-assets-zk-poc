@@ -58,9 +58,24 @@ const getCircomBinary = () => {
 const CIRCOM = getCircomBinary();
 
 try {
+    // Find circomlib location (could be in ../circuits/node_modules or ./node_modules)
+    const parentCircomlibPath = path.join(ROOT, '..', 'circuits', 'node_modules');
+    const localNodeModules = path.join(ROOT, 'node_modules');
+
+    // Build include paths
+    let includePaths = '';
+    if (existsSync(parentCircomlibPath)) {
+        includePaths += ` -l ${parentCircomlibPath}`;
+    }
+    if (existsSync(localNodeModules)) {
+        includePaths += ` -l ${localNodeModules}`;
+    }
+    // Add project root as fallback
+    includePaths += ` -l ${path.join(ROOT, '..')}`;
+
     // Compile circuit
     execSync(
-        `${CIRCOM} ${path.join(CIRCUITS_DIR, 'native_token.circom')} --r1cs --wasm --sym -o ${BUILD_DIR}`,
+        `${CIRCOM} ${path.join(CIRCUITS_DIR, 'native_token.circom')} --r1cs --wasm --sym -o ${BUILD_DIR}${includePaths}`,
         { stdio: 'inherit', cwd: ROOT }
     );
 

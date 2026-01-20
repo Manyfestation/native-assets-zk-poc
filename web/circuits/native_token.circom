@@ -1,8 +1,8 @@
 pragma circom 2.0.0;
 
-include "../../circuits/node_modules/circomlib/circuits/comparators.circom";
-include "../../circuits/node_modules/circomlib/circuits/poseidon.circom";
-include "../../circuits/node_modules/circomlib/circuits/eddsaposeidon.circom";
+include "circomlib/circuits/comparators.circom";
+include "circomlib/circuits/poseidon.circom";
+include "circomlib/circuits/eddsaposeidon.circom";
 
 ///// Helper utils
 
