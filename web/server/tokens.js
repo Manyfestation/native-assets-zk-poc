@@ -12,7 +12,7 @@ const tokens = new Map();
 const DEFAULT_TOKEN = {
     id: 'default',
     name: 'Default Token',
-    covenant: [1, 2, 3, 4, 5, 6, 7, 8],
+    covenant: '0x0102030405060708',  // Single BigInt-compatible value
     createdAt: Date.now(),
     setupMetrics: {
         time: 360,
@@ -29,11 +29,12 @@ tokens.set('default', DEFAULT_TOKEN);
 
 /**
  * Generate covenant from token ID
- * Creates a unique 8-byte script pubkey
+ * Creates a unique script hash as a BigInt-compatible hex string
  */
 export function generateCovenant(tokenId) {
     const hash = crypto.createHash('sha256').update(tokenId).digest();
-    return Array.from(hash.slice(0, 8));
+    // Return as hex string (BigInt-compatible) instead of array
+    return '0x' + hash.slice(0, 8).toString('hex');
 }
 
 /**

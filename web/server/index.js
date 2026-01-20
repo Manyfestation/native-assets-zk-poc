@@ -188,17 +188,20 @@ app.post('/api/tokens/:id/verify', async (req, res) => {
         }
 
         // === STEP 2: Parse public signals ===
-        // Public signals: inputAmounts[10], outputAmounts[10]
-        const MAX_INPUTS = 10;
+        // Circom order: outputs first, then public inputs
+        // publicSignals[0] = outputCommitment (circuit output)
+        // publicSignals[1] = inputAmount (public input)
+        // publicSignals[2..11] = outputAmounts[0..9] (public input array)
         const MAX_OUTPUTS = 10;
-        const inputAmounts = publicSignals.slice(0, MAX_INPUTS).map(s => parseInt(s));
-        const outputAmounts = publicSignals.slice(MAX_INPUTS, MAX_INPUTS + MAX_OUTPUTS).map(s => parseInt(s));
+        const outputCommitment = publicSignals[0]; // Just for reference
+        const inputAmount = parseInt(publicSignals[1]);
+        const outputAmounts = publicSignals.slice(2, 2 + MAX_OUTPUTS).map(s => parseInt(s));
 
         // In our UTXO model: 
-        // - inputAmounts[0] = sender's old balance
+        // - inputAmount = sender's old balance (single input)
         // - outputAmounts[0] = amount to receiver
         // - outputAmounts[1] = sender's change (new balance)
-        const senderOldBalance = inputAmounts[0];
+        const senderOldBalance = inputAmount;
         const receiverAmount = outputAmounts[0];
         const senderNewBalance = outputAmounts[1];
 
@@ -307,13 +310,13 @@ app.post('/api/verify', async (req, res) => {
             return res.json({ valid: false, verifyTime, error: 'ZK proof cryptographically invalid' });
         }
 
-        // Parse UTXO public signals
-        const MAX_INPUTS = 10;
+        // Parse UTXO public signals (Circom order: outputs first, then public inputs)
+        // publicSignals[0] = outputCommitment, [1] = inputAmount, [2..11] = outputAmounts
         const MAX_OUTPUTS = 10;
-        const inputAmounts = publicSignals.slice(0, MAX_INPUTS).map(s => parseInt(s));
-        const outputAmounts = publicSignals.slice(MAX_INPUTS, MAX_INPUTS + MAX_OUTPUTS).map(s => parseInt(s));
+        const inputAmount = parseInt(publicSignals[1]);
+        const outputAmounts = publicSignals.slice(2, 2 + MAX_OUTPUTS).map(s => parseInt(s));
 
-        const senderOldBalance = inputAmounts[0];
+        const senderOldBalance = inputAmount;
         const receiverAmount = outputAmounts[0];
         const senderNewBalance = outputAmounts[1];
 

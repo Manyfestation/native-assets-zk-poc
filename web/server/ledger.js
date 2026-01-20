@@ -3,8 +3,8 @@
  * Tracks token balances for server and connected users
  */
 
-// Server wallet identity (hardcoded script pubkey)
-export const SERVER_WALLET = [1, 2, 3, 4, 5, 6, 7, 8];
+// Server wallet identity (BigInt-compatible hex string)
+export const SERVER_WALLET = '0x0102030405060708';
 
 // Initial ledger state
 let ledger = {

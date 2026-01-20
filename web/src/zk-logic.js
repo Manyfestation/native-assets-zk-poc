@@ -1,20 +1,20 @@
 /**
- * ZK Logic - Zero-Knowledge proof operations
+ * ZK Logic - Zero-Knowledge proof operations with EdDSA signatures
  * 
  * Exports:
- * - generateWallet() - Create ephemeral wallet identity
- * - buildWitness() - Build circuit witness for transfers
+ * - generateWallet() - Create EdDSA keypair wallet
+ * - buildWitness() - Build circuit witness with signature
  * - generateProof() - Generate ZK proof
- * - runTrustedSetup() - Browser-based trusted setup for new tokens
+ * - runTrustedSetup() - Browser-based trusted setup
  */
 
-// snarkjs is loaded via CDN and available as window.snarkjs
+import * as circomlibjs from 'circomlibjs';
+
+// snarkjs loaded via CDN (window global)
 const snarkjs = window.snarkjs;
 
 // === CONSTANTS ===
-const MAX_INPUTS = 10;
 const MAX_OUTPUTS = 10;
-const SCRIPT_LEN = 8;
 
 // Circuit artifacts URLs
 const WASM_URL = '/circuits/native_token_js/native_token.wasm';
@@ -26,33 +26,55 @@ let cachedWasm = null;
 let cachedZkey = null;
 let cachedVkey = null;
 
+// Crypto primitives (initialized lazily)
+let eddsa = null;
+let poseidon = null;
+let F = null;
+
+/**
+ * Initialize crypto primitives from circomlibjs
+ */
+async function initCrypto() {
+    if (eddsa && poseidon) return;
+
+    eddsa = await circomlibjs.buildEddsa();
+    poseidon = await circomlibjs.buildPoseidon();
+    F = poseidon.F;
+}
+
 // === WALLET GENERATION ===
 
 /**
- * Generate a random ephemeral wallet identity
- * Returns a script pubkey (array of 8 numbers)
+ * Generate an EdDSA keypair wallet
+ * Returns { privateKey, publicKey: {x, y}, address }
  */
-export function generateWallet() {
-    const scriptPubKey = [];
-    for (let i = 0; i < SCRIPT_LEN; i++) {
-        scriptPubKey.push(Math.floor(Math.random() * 256));
-    }
+export async function generateWallet() {
+    await initCrypto();
 
-    // Create a simple "address" string for display
-    const address = '0x' + scriptPubKey
-        .map(b => b.toString(16).padStart(2, '0'))
-        .join('')
-        .slice(0, 12) + '...';
+    // Generate random 32-byte private key
+    const privateKey = new Uint8Array(32);
+    crypto.getRandomValues(privateKey);
 
-    return { scriptPubKey, address };
+    // Derive public key
+    const pubKey = eddsa.prv2pub(privateKey);
+
+    // Convert to field elements for circuit
+    const pubKeyX = F.toObject(pubKey[0]);
+    const pubKeyY = F.toObject(pubKey[1]);
+
+    // Create address string for display
+    const address = '0x' + pubKeyX.toString(16).slice(0, 12) + '...';
+
+    return {
+        privateKey,
+        publicKey: { x: pubKeyX, y: pubKeyY },
+        address
+    };
 }
 
 // === WITNESS BUILDING ===
 
-/**
- * Pad array to fixed length
- */
-function padArray(arr, len, defaultVal = 0) {
+function padArray(arr, len, defaultVal = 0n) {
     const result = [...arr];
     while (result.length < len) {
         result.push(defaultVal);
@@ -61,60 +83,132 @@ function padArray(arr, len, defaultVal = 0) {
 }
 
 /**
- * Create zero script
- */
-function zeroScript() {
-    return new Array(SCRIPT_LEN).fill(0);
-}
-
-/**
- * Pad script array
- */
-function padScriptArray(arr, len) {
-    const result = [...arr];
-    while (result.length < len) {
-        result.push(zeroScript());
-    }
-    return result;
-}
-
-/**
- * Build witness for a token transfer (UTXO model)
+ * Build witness for a token transfer with EdDSA signature
  * 
- * In UTXO model:
- * - We spend sender's UTXO (prevOut)
- * - We create two new UTXOs: one for receiver (amount), one as change for sender
- * - Receiver's old balance is irrelevant - they just get a new UTXO
+ * Single input UTXO model:
+ * - One input UTXO (the sender's balance being spent)
+ * - Multiple output UTXOs (recipient + change back to sender)
  * 
- * @param {number[]} covenant - The token's covenant script (8 bytes)
- * @param {number} amount - Amount to transfer
- * @param {number} senderBalance - Current balance of sender
+ * @param {object} senderWallet - Sender's wallet { privateKey, publicKey }
+ * @param {object} recipientPubKey - Recipient's public key { x, y }
+ * @param {bigint} script - Token type / script hash
+ * @param {bigint} amount - Amount to transfer
+ * @param {bigint} senderBalance - Current balance of sender (input UTXO amount)
  */
-export function buildWitness(covenant, amount, senderBalance) {
-    // Input: sender's UTXO with their balance
-    const inputAmounts = padArray([senderBalance], MAX_INPUTS);
-    const inputSpks = padScriptArray([covenant], MAX_INPUTS);
+export async function buildWitness(senderWallet, recipientPubKey, script, amount, senderBalance) {
+    await initCrypto();
 
-    // Output: two UTXOs - one to receiver, one change back to sender
-    const outputAmounts = padArray([amount, senderBalance - amount], MAX_OUTPUTS);
-    const outputSpks = padScriptArray([covenant, covenant], MAX_OUTPUTS);
+    // Convert to BigInt
+    amount = BigInt(amount);
+    senderBalance = BigInt(senderBalance);
+    script = BigInt(script);
+
+    // Single input UTXO: sender's balance
+    const inputAmount = senderBalance;
+    const inputScript = script;
+    const inputOwnerPubKeyX = senderWallet.publicKey.x;
+    const inputOwnerPubKeyY = senderWallet.publicKey.y;
+
+    // Output UTXOs: one to recipient, one change back to sender
+    const change = senderBalance - amount;
+    const outputAmounts = padArray([amount, change], MAX_OUTPUTS, 0n);
+    const outputScripts = padArray([script, script], MAX_OUTPUTS, 0n);
+    const outputOwnerPubKeyX = padArray([recipientPubKey.x, senderWallet.publicKey.x], MAX_OUTPUTS, 0n);
+    const outputOwnerPubKeyY = padArray([recipientPubKey.y, senderWallet.publicKey.y], MAX_OUTPUTS, 0n);
+
+    // Compute output commitment (must match circuit's computation)
+    const outputCommitment = computeOutputCommitment(
+        outputAmounts, outputScripts, outputOwnerPubKeyX
+    );
+
+    // Compute signature message: Poseidon(inputAmount, inputScript, outputCommitment)
+    const msgHash = poseidon([inputAmount, inputScript, outputCommitment]);
+
+    // Sign the message - signPoseidon expects the raw Poseidon output (field element)
+    const signature = eddsa.signPoseidon(senderWallet.privateKey, msgHash);
+
+    // Extract signature components
+    const sigR8x = F.toObject(signature.R8[0]);
+    const sigR8y = F.toObject(signature.R8[1]);
+    const sigS = signature.S;
 
     return {
-        inputAmounts,
-        inputSpks,
-        currentInputIdx: 0,
-        outputAmounts,
-        outputSpks,
-        numOutputs: 2
+        // Single input UTXO
+        inputAmount: inputAmount.toString(),
+        inputScript: inputScript.toString(),
+        inputOwnerPubKeyX: inputOwnerPubKeyX.toString(),
+        inputOwnerPubKeyY: inputOwnerPubKeyY.toString(),
+
+        // Signature
+        sigR8x: sigR8x.toString(),
+        sigR8y: sigR8y.toString(),
+        sigS: sigS.toString(),
+
+        // Output UTXOs
+        outputAmounts: outputAmounts.map(x => x.toString()),
+        outputScripts: outputScripts.map(x => x.toString()),
+        outputOwnerPubKeyX: outputOwnerPubKeyX.map(x => x.toString()),
+        outputOwnerPubKeyY: outputOwnerPubKeyY.map(x => x.toString()),
+        numOutputs: "2"
     };
+}
+
+/**
+ * Compute output commitment using tree-based Poseidon (matches circuit)
+ */
+function computeOutputCommitment(amounts, scripts, pubKeyX) {
+    // Flatten to array of 30 elements (10 outputs * 3 fields each)
+    const data = [];
+    for (let i = 0; i < MAX_OUTPUTS; i++) {
+        data.push(amounts[i]);
+        data.push(scripts[i]);
+        data.push(pubKeyX[i]);
+    }
+
+    // Hash in chunks of 8, then hash results (matches HashArray template)
+    const numChunks = Math.ceil(data.length / 8);
+    const chunkHashes = [];
+
+    for (let c = 0; c < numChunks; c++) {
+        const chunk = [];
+        for (let i = 0; i < 8; i++) {
+            const idx = c * 8 + i;
+            chunk.push(idx < data.length ? data[idx] : 0n);
+        }
+        const hash = poseidon(chunk);
+        chunkHashes.push(F.toObject(hash));
+    }
+
+    // Hash chunk results
+    const finalHash = poseidon(chunkHashes);
+    return F.toObject(finalHash);
+}
+
+/**
+ * Generate a script hash for a new token
+ */
+export async function generateCovenant(tokenName) {
+    await initCrypto();
+
+    // Hash token name to create script hash
+    const encoder = new TextEncoder();
+    const nameBytes = encoder.encode(tokenName);
+
+    // Convert first few bytes to field elements and hash
+    const fields = [];
+    for (let i = 0; i < Math.min(8, nameBytes.length); i++) {
+        fields.push(BigInt(nameBytes[i]));
+    }
+    while (fields.length < 8) {
+        fields.push(0n);
+    }
+
+    const hash = poseidon(fields);
+    return F.toObject(hash);
 }
 
 // === ARTIFACT LOADING ===
 
-/**
- * Load circuit artifacts (WASM, zkey, vkey)
- * Caches for subsequent calls
- */
 export async function loadArtifacts(onLog) {
     if (cachedWasm && cachedZkey && cachedVkey) {
         onLog && onLog('Using cached artifacts');
@@ -123,42 +217,30 @@ export async function loadArtifacts(onLog) {
 
     onLog && onLog('Loading circuit artifacts...');
 
-    // Load WASM
     const wasmResponse = await fetch(WASM_URL);
     if (!wasmResponse.ok) throw new Error('Failed to load WASM');
     cachedWasm = await wasmResponse.arrayBuffer();
 
-    // Load zkey
     const zkeyResponse = await fetch(ZKEY_URL);
     if (!zkeyResponse.ok) throw new Error('Failed to load zkey');
     cachedZkey = await zkeyResponse.arrayBuffer();
 
-    // Load verification key
     const vkeyResponse = await fetch(VKEY_URL);
     if (!vkeyResponse.ok) throw new Error('Failed to load verification key');
     cachedVkey = await vkeyResponse.json();
 
     onLog && onLog('Artifacts loaded');
-
     return { wasm: cachedWasm, zkey: cachedZkey, vkey: cachedVkey };
 }
 
 // === PROOF GENERATION ===
 
-/**
- * Generate a ZK proof for a token transfer
- * 
- * @param {object} witness - The circuit witness (from buildWitness)
- * @param {function} onLog - Logging callback
- * @returns {object} - { proof, publicSignals, proofTime, proofSize }
- */
 export async function generateProof(witness, onLog) {
     const { wasm, zkey } = await loadArtifacts(onLog);
 
     onLog && onLog('Starting proof generation...');
     const start = Date.now();
 
-    // Use snarkjs groth16 fullProve
     const { proof, publicSignals } = await snarkjs.groth16.fullProve(
         witness,
         new Uint8Array(wasm),
@@ -166,8 +248,6 @@ export async function generateProof(witness, onLog) {
     );
 
     const proofTime = Date.now() - start;
-
-    // Calculate proof size in bytes
     const proofJson = JSON.stringify(proof);
     const proofSize = new Blob([proofJson]).size;
 
@@ -176,53 +256,36 @@ export async function generateProof(witness, onLog) {
     return { proof, publicSignals, proofTime, proofSize };
 }
 
+// === TRUSTED SETUP ===
 
-// === TRUSTED SETUP (BROWSER-SIDE) ===
-
-/**
- * Run trusted setup for a new token in the browser
- * This generates the zkey (proving key) and vkey (verification key)
- * 
- * SECURITY: The "toxic waste" stays in the browser and is discarded.
- * 
- * @param {function} onLog - Logging callback
- * @param {function} onProgress - Progress callback (0-100)
- * @returns {object} - { zkey, vkey, setupTime, zkeySize }
- */
 export async function runTrustedSetup(onLog, onProgress) {
     onLog && onLog('Starting trusted setup in browser...');
     onProgress && onProgress(0);
 
     const startTime = Date.now();
 
-    // Load R1CS (circuit constraints)
     onLog && onLog('Loading circuit R1CS...');
     const r1csResponse = await fetch('/circuits/native_token.r1cs');
     if (!r1csResponse.ok) throw new Error('Failed to load R1CS');
     const r1cs = new Uint8Array(await r1csResponse.arrayBuffer());
     onProgress && onProgress(20);
 
-    // Load Powers of Tau (universal setup)
     onLog && onLog('Loading Powers of Tau...');
     const ptauResponse = await fetch('/circuits/pot15_final.ptau');
     if (!ptauResponse.ok) throw new Error('Failed to load PTAU');
     const ptau = new Uint8Array(await ptauResponse.arrayBuffer());
     onProgress && onProgress(40);
 
-    // Generate zkey (this is the slow part)
     onLog && onLog('Generating zkey (proving key)...');
     const zkey = { type: 'mem' };
     await snarkjs.zKey.newZKey(r1cs, ptau, zkey);
     onProgress && onProgress(80);
 
-    // Export verification key
     onLog && onLog('Exporting verification key...');
     const vkey = await snarkjs.zKey.exportVerificationKey(zkey);
     onProgress && onProgress(100);
 
     const setupTime = Date.now() - startTime;
-
-    // Calculate zkey size (approximate)
     const zkeyData = zkey.data;
     const zkeySize = zkeyData ? zkeyData.byteLength : 0;
 

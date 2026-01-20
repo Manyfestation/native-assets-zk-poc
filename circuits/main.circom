@@ -2,211 +2,108 @@ pragma circom 2.0.0;
 
 include "node_modules/circomlib/circuits/poseidon.circom";
 include "node_modules/circomlib/circuits/comparators.circom";
-include "node_modules/circomlib/circuits/gates.circom";
+include "node_modules/circomlib/circuits/bitify.circom";
 
-// Check if two script pub keys are equal
-template ScriptPubKeyEqual(len) {
-    signal input a[len];
-    signal input b[len];
-    signal output isEqual;
+
+// Main circuit 
+template NativeAsset(nInputs, nOutputs) {
+    // Private inputs
+    signal input inAmounts[nInputs];        // Token amounts being spent
+    signal input inCovenants[nInputs];      // Covenant ID of each input (simplified to single field)
     
-    component eq[len];
-    signal allEqual[len + 1];
-    allEqual[0] <== 1;
+    signal input outAmounts[nOutputs];      // Token amounts being created
+    signal input outCovenants[nOutputs];    // Covenant ID of each output
     
-    for (var i = 0; i < len; i++) {
-        eq[i] = IsEqual();
-        eq[i].in[0] <== a[i];
-        eq[i].in[1] <== b[i];
-        allEqual[i + 1] <== allEqual[i] * eq[i].out;
+    signal input spendingCovenant;          // Which covenant we're spending from
+    
+    // Public output
+    signal output commitment;               // Poseidon hash of all private inputs
+    
+    /////////////
+    // Balance check
+    // Sum of inputs must equal sum of outputs
+    signal inSum[nInputs + 1];
+    inSum[0] <== 0;
+    for (var i = 0; i < nInputs; i++) {
+        inSum[i + 1] <== inSum[i] + inAmounts[i];
     }
     
-    isEqual <== allEqual[len];
-}
-
-template BalanceCheck(numInputs, numOutputs) {
-    signal input inputAmounts[numInputs];
-    signal input outputAmounts[numOutputs];
-    
-    // Use signals to accumulate sums (enforced at proof time)
-    signal inputSum[numInputs + 1];
-    signal outputSum[numOutputs + 1];
-    
-    inputSum[0] <== 0;
-    for (var i = 0; i < numInputs; i++) {
-        inputSum[i + 1] <== inputSum[i] + inputAmounts[i];
+    signal outSum[nOutputs + 1];
+    outSum[0] <== 0;
+    for (var i = 0; i < nOutputs; i++) {
+        outSum[i + 1] <== outSum[i] + outAmounts[i];
     }
     
-    outputSum[0] <== 0;
-    for (var i = 0; i < numOutputs; i++) {
-        outputSum[i + 1] <== outputSum[i] + outputAmounts[i];
-    }
+    // Assert in == out
+    inSum[nInputs] === outSum[nOutputs];
+    //////////////
     
-    // This constraint is now enforced at proof generation time!
-    inputSum[numInputs] === outputSum[numOutputs];
-}
+    //////////////
+    // Covenant preservation
+    // All outputs must go back to the same covenant
+    component covenantMatch[nOutputs];
+    component isUsed[nOutputs];
 
-template CheckSpendToSameCovenant(maxOutputs, spkLen) {
-    signal input outputScripts[maxOutputs][spkLen];    
-    signal input currentCovenantScript[spkLen];           
-    signal input numTokenOuts;                          
-
-    component spkEqual[maxOutputs];
-    component idxLessThan[maxOutputs];
-    
-    for (var i = 0; i < maxOutputs; i++) {
-        // Check if output script matches the covenant
-        spkEqual[i] = ScriptPubKeyEqual(spkLen);
-        for (var j = 0; j < spkLen; j++) {
-            spkEqual[i].a[j] <== outputScripts[i][j];
-            spkEqual[i].b[j] <== currentCovenantScript[j];
-        }
+    for (var i = 0; i < nOutputs; i++) {
+        // Check if this slot is used (amount > 0)
+        isUsed[i] = IsZero();
+        isUsed[i].in <== outAmounts[i];
+        // isUsed[i].out = 1 if amount is 0, else 0
         
-        // Check if this index is a "Token Output" (must match covenant)
-        idxLessThan[i] = LessThan(8); 
-        idxLessThan[i].in[0] <== i;
-        idxLessThan[i].in[1] <== numTokenOuts;
+        covenantMatch[i] = IsEqual();
+        covenantMatch[i].in[0] <== outCovenants[i];
+        covenantMatch[i].in[1] <== spendingCovenant;
         
-        // If i < numTokenOuts, then spkEqual must be 1 (match)
-        idxLessThan[i].out * (1 - spkEqual[i].isEqual) === 0;
+        // If slot is used (isUsed.out = 0), covenant must match
+        // If slot is unused (isUsed.out = 1), don't care
+        // Constraint: isUsed OR covenantMatch
+        // (1 - isUsed) * (1 - covenantMatch) === 0
+        (1 - isUsed[i].out) * (1 - covenantMatch[i].out) === 0;
     }
-}
-
-template CheckP2SHSpend(maxInputs, spkLen) {
-    signal input inputScripts[maxInputs][spkLen];  
-    signal input currentTokenScript[spkLen];            
     
-    // Check if ANY input script matches the current Token Script
-    component spkEqual[maxInputs];
-    signal anyMatch[maxInputs + 1];
-    anyMatch[0] <== 0;
-    
-    for (var i = 0; i < maxInputs; i++) {
-        spkEqual[i] = ScriptPubKeyEqual(spkLen);
-        for (var j = 0; j < spkLen; j++) {
-            spkEqual[i].a[j] <== inputScripts[i][j];
-            spkEqual[i].b[j] <== currentTokenScript[j];
-        }
+    // Input authorization
+    // At least one input must be from the spending covenant
+    signal hasAuth[nInputs + 1];
+    hasAuth[0] <== 0;
+    component authCheck[nInputs];
+    for (var i = 0; i < nInputs; i++) {
+        authCheck[i] = IsEqual();
+        authCheck[i].in[0] <== inCovenants[i];
+        authCheck[i].in[1] <== spendingCovenant;
         
-        // OR Accumulator: if(anyMatch || isEqual)
-        anyMatch[i + 1] <== anyMatch[i] + spkEqual[i].isEqual - anyMatch[i] * spkEqual[i].isEqual;
+        // OR accumulator: hasAuth[i+1] = hasAuth[i] OR authCheck[i]
+        // OR(a,b) = a + b - a*b
+        hasAuth[i + 1] <== hasAuth[i] + authCheck[i].out - hasAuth[i] * authCheck[i].out;
     }
     
-    // Constraint: At least one input must match
-    anyMatch[maxInputs] === 1;
+    hasAuth[nInputs] === 1;  // THE CONSTRAINT
+    
+    
+    // Hash all private inputs so verifier can check
+    // "this proof is about THESE specific values"
+    
+    // Poseidon has input limits, so we hash in chunks then combine
+    // For simplicity: hash inputs, hash outputs, combine
+    
+    component hashInputs = Poseidon(nInputs * 2);  // amounts + covenants
+    for (var i = 0; i < nInputs; i++) {
+        hashInputs.inputs[i] <== inAmounts[i];
+        hashInputs.inputs[nInputs + i] <== inCovenants[i];
+    }
+    
+    component hashOutputs = Poseidon(nOutputs * 2);
+    for (var i = 0; i < nOutputs; i++) {
+        hashOutputs.inputs[i] <== outAmounts[i];
+        hashOutputs.inputs[nOutputs + i] <== outCovenants[i];
+    }
+    
+    component finalHash = Poseidon(3);
+    finalHash.inputs[0] <== hashInputs.out;
+    finalHash.inputs[1] <== hashOutputs.out;
+    finalHash.inputs[2] <== spendingCovenant;
+    
+    commitment <== finalHash.out;
 }
 
-// ============================================
-// INDEX SELECTOR
-// ============================================
-template ArraySelector(n) {
-    signal input arr[n];
-    signal input index;
-    signal output out;
-    
-    component isEq[n];
-    signal selected[n + 1];
-    selected[0] <== 0;
-    
-    for (var i = 0; i < n; i++) {
-        isEq[i] = IsEqual();
-        isEq[i].in[0] <== i;
-        isEq[i].in[1] <== index;
-        selected[i + 1] <== selected[i] + isEq[i].out * arr[i];
-    }
-    
-    out <== selected[n];
-}
-
-// Prove correct asset transfer
-template NativeAssetProof(maxInputs, maxOutputs, spkLen) {
-    // Set inputs (prev state)
-    signal input inputAmounts[maxInputs];                     
-    signal input inputScripts[maxInputs][spkLen];                
-    signal input inputTokenScripts[maxInputs][spkLen];
-    signal input numInputs;
-    signal input inputIndex; // Input index of a single input to identify covenant script
-    
-    // -- Outputs (Next State) --
-    signal input outputAmounts[maxOutputs];                        
-    signal input outputScripts[maxOutputs][spkLen];                   
-    signal input numOutputs;                                       
-    signal input numTokenOuts;                          // How many outputs carry the token forward
-    
-    // -- Spending Mode --
-    signal input isP2SHSpend;  // 0 = signature spend, 1 = P2SH spend
-    
-    // Verify 
-    component balanceCheck = BalanceCheck(maxInputs, maxOutputs);
-    for (var i = 0; i < maxInputs; i++) {
-        balanceCheck.inputAmounts[i] <== inputAmounts[i];
-    }
-    for (var i = 0; i < maxOutputs; i++) {
-        balanceCheck.outputAmounts[i] <== outputAmounts[i];
-    }
-    
-    // We must find the script of the input we are spending
-    // currentCovenantScript = inputScripts[inputIndex]
-    signal currentCovenantScript[spkLen];
-    component covenantSelectors[spkLen];
-    
-    for (var j = 0; j < spkLen; j++) {
-        covenantSelectors[j] = ArraySelector(maxInputs);
-        for (var i = 0; i < maxInputs; i++) {
-            covenantSelectors[j].arr[i] <== inputScripts[i][j];
-        }
-        covenantSelectors[j].index <== inputIndex;
-        currentCovenantScript[j] <== covenantSelectors[j].out;
-    }
-    
-    // ==========================================
-    // 3. COVENANT CHECK
-    // ==========================================
-    // Enforce that token outputs preserve the covenant script
-    
-    component covenantCheck = CheckSpendToSameCovenant(maxOutputs, spkLen);
-    for (var i = 0; i < maxOutputs; i++) {
-        for (var j = 0; j < spkLen; j++) {
-            covenantCheck.outputScripts[i][j] <== outputScripts[i][j];
-        }
-    }
-    for (var j = 0; j < spkLen; j++) {
-        covenantCheck.currentCovenantScript[j] <== currentCovenantScript[j];
-    }
-    covenantCheck.numTokenOuts <== numTokenOuts;
-    
-    
-    // Verify consistency of token covenant logic 
-    signal currentTokenScript[spkLen];
-    component tokenSpkSelectors[spkLen];
-    // For each 
-    for (var j = 0; j < spkLen; j++) {
-        tokenSpkSelectors[j] = ArraySelector(maxInputs);
-        for (var i = 0; i < maxInputs; i++) {
-            tokenSpkSelectors[j].arr[i] <== inputTokenScripts[i][j];
-        }
-        tokenSpkSelectors[j].index <== inputIndex;
-        currentTokenScript[j] <== tokenSpkSelectors[j].out;
-    }
-    
-    // ==========================================
-    // 5. P2SH SPEND CHECK
-    // ==========================================
-    // If enabled, ensure the transaction is "hooked" correcty:
-    // One of the inputs must have a ScriptPubKey == currentTokenScript
-    
-    component p2shCheck = CheckP2SHSpend(maxInputs, spkLen);
-    for (var i = 0; i < maxInputs; i++) {
-        for (var j = 0; j < spkLen; j++) {
-            p2shCheck.inputScripts[i][j] <== inputScripts[i][j];
-        }
-    }
-    for (var j = 0; j < spkLen; j++) {
-        p2shCheck.currentTokenScript[j] <== currentTokenScript[j];
-    }
-    
-    // If all constraints above are satisfied, the proof is valid
-}
-
-// Config: maxInputs=20, maxOutputs=20, scriptLen=64
-component main = NativeAssetProof(20, 20, 64);
+// 3 inputs, 3 outputs - small for learning
+component main {public [commitment]} = NativeAsset(3, 3);

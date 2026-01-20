@@ -41,6 +41,7 @@ import {
 
 // === APPLICATION STATE ===
 let userWallet = null;
+let serverWallet = null;  // Simulated server wallet for demo
 let userId = null;
 let currentToken = null;
 let tokens = [];
@@ -208,9 +209,16 @@ async function receiveFromServer() {
 
         log(`Transfer: ${amount} tokens from Server to You`);
 
-        // Build witness (UTXO model - only sender balance needed)
+        // Build witness (UTXO model)
+        // Server is sender, user is recipient
         log('Building witness...', 'info');
-        const witness = buildWitness(currentToken.covenant, amount, serverBalance);
+        const witness = await buildWitness(
+            serverWallet,           // sender wallet (server)
+            userWallet.publicKey,   // recipient pub key (user)
+            currentToken.covenant,  // script/token type
+            amount,                 // amount to transfer
+            serverBalance           // sender's current balance
+        );
 
         // Generate proof
         const result = await generateProof(witness, log);
@@ -270,8 +278,16 @@ async function sendToServer() {
 
         log(`Transfer: ${amount} tokens from You to Server`);
 
-        // Build witness (UTXO model - only sender balance needed)
-        const witness = buildWitness(currentToken.covenant, amount, userBalance);
+        // Build witness (UTXO model)
+        // User is sender, server is recipient
+        log('Building witness...', 'info');
+        const witness = await buildWitness(
+            userWallet,               // sender wallet (user)
+            serverWallet.publicKey,   // recipient pub key (server)
+            currentToken.covenant,    // script/token type
+            amount,                   // amount to transfer
+            userBalance               // sender's current balance
+        );
         const result = await generateProof(witness, log);
         lastProof = result.proof;
         lastPublicSignals = result.publicSignals;
@@ -355,8 +371,10 @@ async function init() {
             // Load tokens
             await loadTokens();
 
-            // Generate user wallet
-            userWallet = generateWallet();
+            // Generate wallets (crypto init can take a few seconds)
+            log('Initializing crypto primitives...', 'info');
+            userWallet = await generateWallet();
+            serverWallet = await generateWallet();  // Simulated server wallet
             userId = 'user_' + Date.now();
             showWalletAddress(userWallet.address);
             log(`Generated wallet: ${userWallet.address}`, 'success');

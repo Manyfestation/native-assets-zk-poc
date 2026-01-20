@@ -198,8 +198,8 @@ export function setCurrentTokenName(name) {
  * Set the server address (covenant display)
  */
 export function setServerAddress(covenant) {
-    const covenantAddr = '0x' + covenant.map(b => b.toString(16).padStart(2, '0')).join('');
-    elements.serverAddress.textContent = covenantAddr;
+    // Covenant is already a hex string (e.g., "0x0102030405060708")
+    elements.serverAddress.textContent = covenant;
 }
 
 /**
