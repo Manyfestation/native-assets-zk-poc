@@ -48,17 +48,16 @@ template HashArray(n) {
     out <== finalHash.out;
 }
 
-// NATIVE ASSET PROOF
 // Single input UTXO being spent to multiple outputs.
 // 
-// 1. BALANCE CONSERVATION: inputAmount == sum(outputAmounts)
-// 2. SCRIPT PRESERVATION: all outputs have same script as input
-// 3. OWNER AUTHORIZATION: valid EdDSA signature from input owner
-template NativeAssetProof(maxOutputs) {
+// 1. balance conservation: inputAmount == sum(outputAmounts)
+// 2. token data preservation: all outputs have same token params
+// 3. authorization: valid EdDSA signature 
+template TokenTransferProof(maxOutputs) {
     // Private inputs
-    // Single utxo input - amount and script
+    // Single utxo input - amount and token params
     signal input inputAmount;
-    signal input inputScript;  // Token type / script hash
+    signal input tokenParams;  // Token covenant/Script with parameters
 
     // Spender public key (2 params in EdDSA)
     signal input inputOwnerPubKeyX; 
@@ -69,12 +68,12 @@ template NativeAssetProof(maxOutputs) {
     signal input sigR8y;
     signal input sigS;
 
-    // Multiple outputs - amount, script, owner pub key
+    // Multiple outputs - amount, token params, owner pub key
     signal input outputAmounts[maxOutputs];
-    signal input outputScripts[maxOutputs];  // Must match input script
+    signal input outputTokenParams[maxOutputs];  // Must match input token params
     signal input outputOwnerPubKeyX[maxOutputs];
     signal input outputOwnerPubKeyY[maxOutputs];
-    signal input numOutputs;  // How many outputs are active (rest are padding)
+    signal input numOutputs;
     
     // Public output
     signal output outputCommitment; 
@@ -89,28 +88,28 @@ template NativeAssetProof(maxOutputs) {
     
     inputAmount === outSum[maxOutputs];
     
-    // 2. Script preservation: all active outputs must match input script
-    component scriptMatch[maxOutputs];
-    component isActive[maxOutputs];
+    // 2. Token script preservation: all used outputs must match input token params/script
+    component tokenParamsEqual[maxOutputs];
+    component isUsedSlot[maxOutputs];
     
     for (var i = 0; i < maxOutputs; i++) {
-        scriptMatch[i] = FieldEqual();
-        scriptMatch[i].a <== outputScripts[i];
-        scriptMatch[i].b <== inputScript;
+        tokenParamsEqual[i] = FieldEqual();
+        tokenParamsEqual[i].a <== outputTokenParams[i];
+        tokenParamsEqual[i].b <== tokenParams;
         
-        isActive[i] = LessThan(8);
-        isActive[i].in[0] <== i;
-        isActive[i].in[1] <== numOutputs;
+        isUsedSlot[i] = LessThan(8);
+        isUsedSlot[i].in[0] <== i;
+        isUsedSlot[i].in[1] <== numOutputs;
         
-        // If active, script MUST match (constraint fails otherwise)
-        isActive[i].out * (1 - scriptMatch[i].out) === 0;
+        // If slot is used (not padding), token params/script must match
+        isUsedSlot[i].out * (1 - tokenParamsEqual[i].out) === 0;
     }
     
-    // 3. Output commitment: hash all outputs for binding
+    // 3. Commit all private inputs
     signal outputData[maxOutputs * 3];
     for (var i = 0; i < maxOutputs; i++) {
         outputData[i * 3] <== outputAmounts[i];
-        outputData[i * 3 + 1] <== outputScripts[i];
+        outputData[i * 3 + 1] <== outputTokenParams[i];
         outputData[i * 3 + 2] <== outputOwnerPubKeyX[i];
     }
     
@@ -120,11 +119,10 @@ template NativeAssetProof(maxOutputs) {
     }
     outputCommitment <== outCommit.out;
     
-    // 4. Signature verification: owner authorizes this spend
-    // Message = Poseidon(inputAmount, inputScript, outputCommitment)
+    // 4. Signature verification
     component sigMsg = Poseidon(3);
     sigMsg.inputs[0] <== inputAmount;
-    sigMsg.inputs[1] <== inputScript;
+    sigMsg.inputs[1] <== tokenParams;
     sigMsg.inputs[2] <== outputCommitment;
     
     component sigVerify = EdDSAPoseidonVerifier();
@@ -137,4 +135,4 @@ template NativeAssetProof(maxOutputs) {
     sigVerify.M <== sigMsg.out;
 }
 
-component main {public [inputAmount, outputAmounts]} = NativeAssetProof(10);
+component main {public [inputAmount, outputAmounts]} = TokenTransferProof(10);
