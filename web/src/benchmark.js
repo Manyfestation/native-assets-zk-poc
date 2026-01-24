@@ -272,8 +272,14 @@ async function runZokratesBenchmark() {
         async function signZoKrates(privKeyBytes, messageWords) {
             // 1. Generate Public Key: A = s * G   (where G is ZoKrates generator)
 
+            // Ensure we have access to Web Crypto API
+            const cryptoSubtle = (globalThis.crypto || window.crypto)?.subtle;
+            if (!cryptoSubtle) {
+                throw new Error('Web Crypto API not available. Ensure the page is served over HTTPS or localhost.');
+            }
+
             // Prune buffer (standard EdDSA clamping)
-            const h = await crypto.subtle.digest('SHA-256', privKeyBytes);
+            const h = await cryptoSubtle.digest('SHA-256', privKeyBytes);
             const sBuff = new Uint8Array(h);
             sBuff[0] &= 0xF8;
             sBuff[31] &= 0x7F;
@@ -354,7 +360,7 @@ async function runZokratesBenchmark() {
             hashInput.set(M0_bytes, 64);
             hashInput.set(M1_bytes, 96);
 
-            const hRAM_digest = await crypto.subtle.digest('SHA-256', hashInput);
+            const hRAM_digest = await cryptoSubtle.digest('SHA-256', hashInput);
             const hRAM_bytes = new Uint8Array(hRAM_digest);
 
             // Convert hash to scalar
