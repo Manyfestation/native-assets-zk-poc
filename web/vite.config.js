@@ -12,7 +12,13 @@ export default defineConfig({
     ],
     build: {
         outDir: '../dist',
-        emptyOutDir: true
+        emptyOutDir: true,
+        rollupOptions: {
+            input: {
+                main: 'src/index.html',
+                legacy: 'src/legacy_dashboard.html'
+            }
+        }
     },
     server: {
         port: 5173,
@@ -22,6 +28,10 @@ export default defineConfig({
                 changeOrigin: true
             },
             '/circuits': {
+                target: 'http://localhost:3001',
+                changeOrigin: true
+            },
+            '/provers': {
                 target: 'http://localhost:3001',
                 changeOrigin: true
             }

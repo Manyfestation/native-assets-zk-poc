@@ -57,7 +57,7 @@ template TokenTransferProof(maxOutputs) {
     // Private inputs
     // Single utxo input - amount and token params
     signal input inputAmount;
-    signal input tokenParams;  // Token covenant/Script with parameters
+    signal input inputScript;  // Token covenant/Script with parameters
 
     // Spender public key (2 params in EdDSA)
     signal input inputOwnerPubKeyX; 
@@ -70,7 +70,7 @@ template TokenTransferProof(maxOutputs) {
 
     // Multiple outputs - amount, token params, owner pub key
     signal input outputAmounts[maxOutputs];
-    signal input outputTokenParams[maxOutputs];  // Must match input token params
+    signal input outputScripts[maxOutputs];  // Must match input token params
     signal input outputOwnerPubKeyX[maxOutputs];
     signal input outputOwnerPubKeyY[maxOutputs];
     signal input numOutputs;
@@ -94,8 +94,8 @@ template TokenTransferProof(maxOutputs) {
     
     for (var i = 0; i < maxOutputs; i++) {
         tokenParamsEqual[i] = FieldEqual();
-        tokenParamsEqual[i].a <== outputTokenParams[i];
-        tokenParamsEqual[i].b <== tokenParams;
+        tokenParamsEqual[i].a <== outputScripts[i];
+        tokenParamsEqual[i].b <== inputScript;
         
         isUsedSlot[i] = LessThan(8);
         isUsedSlot[i].in[0] <== i;
@@ -109,7 +109,7 @@ template TokenTransferProof(maxOutputs) {
     signal outputData[maxOutputs * 3];
     for (var i = 0; i < maxOutputs; i++) {
         outputData[i * 3] <== outputAmounts[i];
-        outputData[i * 3 + 1] <== outputTokenParams[i];
+        outputData[i * 3 + 1] <== outputScripts[i];
         outputData[i * 3 + 2] <== outputOwnerPubKeyX[i];
     }
     
@@ -122,7 +122,7 @@ template TokenTransferProof(maxOutputs) {
     // 4. Signature verification
     component sigMsg = Poseidon(3);
     sigMsg.inputs[0] <== inputAmount;
-    sigMsg.inputs[1] <== tokenParams;
+    sigMsg.inputs[1] <== inputScript;
     sigMsg.inputs[2] <== outputCommitment;
     
     component sigVerify = EdDSAPoseidonVerifier();

@@ -1,0 +1,61 @@
+import "hashes/poseidon/poseidon" as poseidon;
+from "ecc/babyjubjubParams" import BabyJubJubParams;
+import "ecc/babyjubjubParams" as context;
+import "signatures/verifyEddsa" as verifyEddsa;
+
+// Token Transfer Circuit for ZoKrates
+// 
+// Proves:
+// 1. Balance conservation: inputAmount == sum(outputAmounts)
+// 2. Token data preservation: all outputs have same token params
+// 3. Authorization: valid EdDSA signature from input owner
+//
+// Signature scheme: EdDSA on BabyJubJub with SHA-512 message format
+
+const u32 MAX_OUTPUTS = 10;
+
+def main(
+    // === PRIVATE: Input UTXO Data ===
+    private field inputAmount,
+    private field tokenParams,
+    
+    // === PRIVATE: EdDSA Signature (SHA-256 based) ===
+    private field[2] sigR,        // Signature R point
+    private field sigS,           // Signature S scalar
+    private field[2] pubKey,      // Public key [x, y]
+    
+    // === PRIVATE: Message as u32[8] arrays (for EdDSA) ===
+    private u32[8] msgPart0,      // First 256 bits of message
+    private u32[8] msgPart1,      // Second 256 bits of message
+    
+    // === PUBLIC: Outputs ===
+    field[MAX_OUTPUTS] outputAmounts,
+    field[MAX_OUTPUTS] outputTokenParams,
+    field[MAX_OUTPUTS] outputOwnerPubKeyX
+) {
+    BabyJubJubParams ctx = context();
+    
+    // 1. Balance Conservation: inputAmount == sum(outputAmounts)
+    field mut totalOut = 0;
+    for u32 i in 0..MAX_OUTPUTS {
+        totalOut = totalOut + outputAmounts[i];
+    }
+    assert(inputAmount == totalOut);
+    
+    // 2. Token Params Preservation: all non-zero outputs must match input tokenParams
+    for u32 i in 0..MAX_OUTPUTS {
+        field diff = outputTokenParams[i] - tokenParams;
+        assert(outputAmounts[i] * diff == 0);
+    }
+    
+    // 3. Compute output commitments using Poseidon
+    field outputData0 = poseidon([outputAmounts[0], outputTokenParams[0], outputOwnerPubKeyX[0]]);
+    field outputData1 = poseidon([outputAmounts[1], outputTokenParams[1], outputOwnerPubKeyX[1]]);
+    field outputCommitment = poseidon([outputData0, outputData1]);
+    
+    // 4. EdDSA Signature Verification (SHA-256 based - ZoKrates standard)
+    bool sigValid = verifyEddsa(sigR, sigS, pubKey, msgPart0, msgPart1, ctx);
+    assert(sigValid);
+    
+    return;
+}

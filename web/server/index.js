@@ -30,6 +30,10 @@ app.use(express.json({ limit: '10mb' }));
 // Serve static files
 app.use('/circuits', express.static(BUILD_DIR));
 
+// Serve prover artifacts from /provers
+const PROVERS_DIR = path.join(__dirname, '..', '..', 'provers');
+app.use('/provers', express.static(PROVERS_DIR));
+
 // Serve frontend in production
 const DIST_DIR = path.join(__dirname, '..', 'dist');
 if (existsSync(DIST_DIR)) {
