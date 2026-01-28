@@ -4,7 +4,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ZK Benchmark: ZoKrates vs Circom</title>
+    <title>ZK Prover Benchmark Suite</title>
+    <meta name="description"
+        content="Fair comparison benchmark of ZoKrates, Circom, and Gnark ZK provers using EdDSA + Poseidon/MiMC cryptographic circuits.">
     <link rel="stylesheet" href="benchmark.css">
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
@@ -13,22 +15,24 @@
     <div class="app-container">
         <!-- Header -->
         <header class="header">
-            <h1>⚡ ZK Prover Benchmark</h1>
-            <p class="subtitle">Fair Comparison: ZoKrates vs Circom | 1 EdDSA + Poseidon | Client-Side WASM</p>
+            <h1>ZK Prover Benchmark Suite</h1>
+            <p class="subtitle">Fair Comparison: ZoKrates vs Circom vs Gnark | EdDSA + Poseidon/MiMC | Client-Side WASM
+            </p>
         </header>
 
         <!-- Benchmark Info Panel -->
         <section class="info-panel">
-            <h2>📋 Benchmark Circuit</h2>
-            <p>Both provers execute an <strong>equivalent circuit</strong> with:</p>
+            <h2>Benchmark Circuit</h2>
+            <p>All provers execute an <strong>equivalent circuit</strong> with:</p>
             <ul>
-                <li>✅ <strong>1 EdDSA signature verification</strong> (BabyJubJub)</li>
-                <li>✅ <strong>Poseidon hashes</strong> for commitments</li>
-                <li>✅ <strong>Balance conservation check</strong></li>
+                <li><strong>1 EdDSA signature verification</strong> (BabyJubJub)</li>
+                <li><strong>Poseidon/MiMC hashes</strong> for commitments</li>
+                <li><strong>Balance conservation check</strong></li>
             </ul>
             <div class="circuit-info">
                 <span class="badge circom">Circom: native_token (10 outputs)</span>
                 <span class="badge zokrates">ZoKrates: eddsa_benchmark (inline)</span>
+                <span class="badge gnark">Gnark: token_transfer (MiMC)</span>
             </div>
         </section>
 
@@ -37,7 +41,7 @@
             <!-- ZoKrates Column -->
             <div class="prover-card zokrates">
                 <div class="card-header">
-                    <h2>🦁 ZoKrates</h2>
+                    <h2>ZoKrates</h2>
                     <span class="version">zokrates-js v1.1.7</span>
                 </div>
 
@@ -77,7 +81,7 @@
                 </div>
 
                 <button id="btn-run-zokrates" class="btn btn-zokrates">
-                    🔐 Run ZoKrates Proof
+                    Run ZoKrates Proof
                 </button>
                 <div class="status" id="zok-status">Ready</div>
             </div>
@@ -85,7 +89,7 @@
             <!-- Circom Column -->
             <div class="prover-card circom">
                 <div class="card-header">
-                    <h2>🔷 Circom + snarkjs</h2>
+                    <h2>Circom + snarkjs</h2>
                     <span class="version">snarkjs v0.7.6</span>
                 </div>
 
@@ -125,15 +129,63 @@
                 </div>
 
                 <button id="btn-run-circom" class="btn btn-circom">
-                    🔐 Run Circom Proof
+                    Run Circom Proof
                 </button>
                 <div class="status" id="circom-status">Ready</div>
+            </div>
+
+            <!-- Gnark Column -->
+            <div class="prover-card gnark">
+                <div class="card-header">
+                    <h2>Gnark</h2>
+                    <span class="version">Gnark v0.14.0 (Go / WASM)</span>
+                </div>
+
+                <div class="metrics-grid" id="gnark-metrics">
+                    <div class="metric">
+                        <span class="metric-label">Constraints</span>
+                        <span class="metric-value" id="gnark-constraints">--</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Compile Time</span>
+                        <span class="metric-value" id="gnark-compile-time">N/A (pre-compiled)</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Setup Time</span>
+                        <span class="metric-value" id="gnark-setup-time">--</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Witness Time</span>
+                        <span class="metric-value" id="gnark-witness-time">--</span>
+                    </div>
+                    <div class="metric highlight">
+                        <span class="metric-label">Proof Time</span>
+                        <span class="metric-value" id="gnark-proof-time">--</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Proof Size</span>
+                        <span class="metric-value" id="gnark-proof-size">--</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">VK Size</span>
+                        <span class="metric-value" id="gnark-vk-size">--</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">PK Size</span>
+                        <span class="metric-value" id="gnark-pk-size">--</span>
+                    </div>
+                </div>
+
+                <button id="btn-run-gnark" class="btn btn-gnark">
+                    Run Gnark Proof
+                </button>
+                <div class="status" id="gnark-status">Ready</div>
             </div>
         </section>
 
         <!-- Logs Section -->
         <section class="panel terminal-panel">
-            <h2>📜 Logs</h2>
+            <h2>Logs</h2>
             <div class="terminal" id="terminal">
                 <div class="terminal-line">[SYSTEM] ZK Benchmark initialized - click a button to run a prover</div>
             </div>
@@ -141,14 +193,16 @@
 
         <!-- Proof Output -->
         <section class="panel proof-panel">
-            <h2>🔍 Proof Output</h2>
+            <h2>Proof Output</h2>
             <div class="proof-tabs">
                 <button class="tab active" data-tab="zok-proof">ZoKrates</button>
                 <button class="tab" data-tab="circom-proof">Circom</button>
+                <button class="tab" data-tab="gnark-proof">Gnark</button>
             </div>
             <div class="proof-content">
                 <pre id="zok-proof" class="proof-output active">Run ZoKrates benchmark to see proof...</pre>
                 <pre id="circom-proof" class="proof-output">Run Circom benchmark to see proof...</pre>
+                <pre id="gnark-proof" class="proof-output">Run Gnark benchmark to see proof...</pre>
             </div>
         </section>
     </div>

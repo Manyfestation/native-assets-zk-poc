@@ -7,6 +7,8 @@
  * - Balance conservation check
  */
 
+import { CircomProver } from './provers/circom.js';
+import { GnarkProver } from './provers/gnark.js';
 import * as circomlibjs from 'circomlibjs';
 
 // snarkjs loaded via CDN
@@ -145,6 +147,19 @@ const elements = {
     circomVkSize: document.getElementById('circom-vk-size'),
     circomZkeySize: document.getElementById('circom-zkey-size'),
     circomProofOutput: document.getElementById('circom-proof'),
+
+    // Gnark
+    btnRunGnark: document.getElementById('btn-run-gnark'),
+    gnarkStatus: document.getElementById('gnark-status'),
+    gnarkConstraints: document.getElementById('gnark-constraints'),
+    gnarkCompileTime: document.getElementById('gnark-compile-time'),
+    gnarkSetupTime: document.getElementById('gnark-setup-time'),
+    gnarkWitnessTime: document.getElementById('gnark-witness-time'),
+    gnarkProofTime: document.getElementById('gnark-proof-time'),
+    gnarkProofSize: document.getElementById('gnark-proof-size'),
+    gnarkVkSize: document.getElementById('gnark-vk-size'),
+    gnarkPkSize: document.getElementById('gnark-pk-size'),
+    gnarkProofOutput: document.getElementById('gnark-proof'),
 
     // Shared
     terminal: document.getElementById('terminal'),
@@ -747,6 +762,75 @@ async function runCircomBenchmark() {
     }
 }
 
+// === GNARK PROVER ===
+
+let gnarkProver = null;
+
+async function runGnarkBenchmark() {
+    elements.btnRunGnark.disabled = true;
+    elements.btnRunGnark.classList.add('loading');
+    elements.gnarkStatus.textContent = 'Running...';
+    elements.gnarkStatus.className = 'status running';
+
+    const metrics = {};
+
+    try {
+        const forceUpdate = () => new Promise(resolve => setTimeout(resolve, 50));
+
+        if (!gnarkProver) {
+            log('Initializing Gnark Prover...', 'gnark');
+            gnarkProver = new GnarkProver();
+            const initStart = performance.now();
+            await gnarkProver.init();
+            log(`Gnark WASM initialized in ${formatMs(performance.now() - initStart)}`, 'gnark');
+        }
+
+        // Generate Inputs
+        log('Generating inputs...', 'gnark');
+        await forceUpdate();
+        const inputs = await gnarkProver.generateInputs();
+
+        // Prove
+        log('Generating Proof (Groth16)...', 'gnark');
+        await forceUpdate();
+
+        const result = await gnarkProver.prove(inputs);
+
+        metrics.proofTime = result.metrics.proofTime;
+        metrics.proofSize = result.metrics.proofSize;
+        metrics.constraints = gnarkProver.getConstraints();
+
+        elements.gnarkProofTime.textContent = formatMs(metrics.proofTime);
+        elements.gnarkProofSize.textContent = formatBytes(metrics.proofSize);
+
+        // Display proof as Hex
+        const proofHex = Array.from(result.proof).map(b => b.toString(16).padStart(2, '0')).join('');
+        elements.gnarkProofOutput.textContent = proofHex;
+
+        // Update sizes (approx, assuming loaded)
+        // In real impl we'd get them from prover
+        elements.gnarkPkSize.textContent = "Unknown";
+        elements.gnarkVkSize.textContent = "Unknown";
+
+        const constraints = metrics.constraints;
+        elements.gnarkConstraints.textContent = constraints ? constraints.toLocaleString() : "Unknown";
+
+        log(`Gnark proof generated in ${formatMs(metrics.proofTime)}`, 'success');
+        elements.gnarkStatus.textContent = `Complete - ${formatMs(metrics.proofTime)}`;
+        elements.gnarkStatus.className = 'status success';
+
+    } catch (error) {
+        log(`Gnark error: ${error.message}`, 'error');
+        console.error(error);
+        elements.gnarkStatus.textContent = 'Error';
+        elements.gnarkStatus.className = 'status error';
+        elements.gnarkProofOutput.textContent = `Error: ${error.message}`;
+    } finally {
+        elements.btnRunGnark.disabled = false;
+        elements.btnRunGnark.classList.remove('loading');
+    }
+}
+
 // === TAB SWITCHING ===
 function setupTabs() {
     elements.tabs.forEach(tab => {
@@ -770,6 +854,7 @@ async function init() {
 
     elements.btnRunZokrates.addEventListener('click', runZokratesBenchmark);
     elements.btnRunCircom.addEventListener('click', runCircomBenchmark);
+    elements.btnRunGnark.addEventListener('click', runGnarkBenchmark);
 
     // Pre-fetch Circom artifact sizes
     try {

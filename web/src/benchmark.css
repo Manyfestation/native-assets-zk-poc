@@ -7,22 +7,27 @@
     --text-primary: #e4e4e7;
     --text-secondary: #a1a1aa;
     --text-muted: #71717a;
-    
+
     /* Prover-specific colors */
     --zokrates-primary: #ff6b35;
     --zokrates-secondary: #ff8c5a;
     --zokrates-bg: rgba(255, 107, 53, 0.1);
     --zokrates-border: rgba(255, 107, 53, 0.3);
-    
+
     --circom-primary: #3b82f6;
     --circom-secondary: #60a5fa;
     --circom-bg: rgba(59, 130, 246, 0.1);
     --circom-border: rgba(59, 130, 246, 0.3);
-    
+
+    --gnark-primary: #00ADD8;
+    --gnark-secondary: #0095bb;
+    --gnark-bg: rgba(0, 173, 216, 0.15);
+    --gnark-border: rgba(0, 173, 216, 0.3);
+
     --success: #22c55e;
     --error: #ef4444;
     --warning: #f59e0b;
-    
+
     --font-mono: 'JetBrains Mono', monospace;
     --radius: 12px;
     --radius-sm: 8px;
@@ -130,7 +135,7 @@ body {
 /* Benchmark Grid */
 .benchmark-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr 1fr 1fr;
     gap: 2rem;
     margin-bottom: 2rem;
 }
@@ -155,6 +160,10 @@ body {
 
 .prover-card.circom {
     border: 1px solid var(--circom-border);
+}
+
+.prover-card.gnark {
+    border: 1px solid var(--gnark-border);
 }
 
 .prover-card:hover {
@@ -184,10 +193,14 @@ body {
     color: var(--circom-primary);
 }
 
+.prover-card.gnark .card-header h2 {
+    color: var(--gnark-primary);
+}
+
 .version {
     font-size: 0.7rem;
     color: var(--text-muted);
-    background: rgba(255,255,255,0.05);
+    background: rgba(255, 255, 255, 0.05);
     padding: 0.25rem 0.5rem;
     border-radius: 4px;
 }
@@ -223,6 +236,11 @@ body {
 .prover-card.circom .metric.highlight {
     border-color: var(--circom-border);
     background: var(--circom-bg);
+}
+
+.prover-card.gnark .metric.highlight {
+    border-color: var(--gnark-border);
+    background: var(--gnark-bg);
 }
 
 .metric-label {
@@ -286,8 +304,15 @@ body {
 }
 
 @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.6; }
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.6;
+    }
 }
 
 /* Status */
@@ -344,11 +369,29 @@ body {
     word-break: break-word;
 }
 
-.terminal-line.info { color: var(--circom-secondary); }
-.terminal-line.success { color: var(--success); }
-.terminal-line.error { color: var(--error); }
-.terminal-line.zokrates { color: var(--zokrates-secondary); }
-.terminal-line.circom { color: var(--circom-secondary); }
+.terminal-line.info {
+    color: var(--circom-secondary);
+}
+
+.terminal-line.success {
+    color: var(--success);
+}
+
+.terminal-line.error {
+    color: var(--error);
+}
+
+.terminal-line.zokrates {
+    color: var(--zokrates-secondary);
+}
+
+.terminal-line.circom {
+    color: var(--circom-secondary);
+}
+
+.terminal-line.gnark {
+    color: var(--gnark-secondary);
+}
 
 /* Proof Output */
 .proof-tabs {
@@ -398,4 +441,21 @@ body {
 
 .proof-output.active {
     display: block;
+}
+
+/* Gnark Specific Styles */
+.btn-gnark {
+    background: linear-gradient(135deg, var(--gnark-primary), var(--gnark-secondary));
+    color: white;
+}
+
+.btn-gnark:hover:not(:disabled) {
+    transform: scale(1.02);
+    box-shadow: 0 4px 20px rgba(0, 173, 216, 0.4);
+}
+
+.badge.gnark {
+    background-color: rgba(0, 173, 216, 0.15);
+    color: #00ADD8;
+    border: 1px solid rgba(0, 173, 216, 0.3);
 }

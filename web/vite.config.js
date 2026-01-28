@@ -31,7 +31,8 @@ export default defineConfig({
                 target: 'http://localhost:3001',
                 changeOrigin: true
             },
-            '/provers': {
+            // Only proxy artifact requests, not the JS prover implementations
+            '/provers/gnark/artifacts': {
                 target: 'http://localhost:3001',
                 changeOrigin: true
             }
