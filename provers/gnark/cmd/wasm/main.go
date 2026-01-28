@@ -2,6 +2,7 @@
 package main
 
 import (
+    "time"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -190,26 +191,44 @@ func prove(this js.Value, args []js.Value) (result interface{}) {
 		return map[string]interface{}{"error": "No arguments provided"}
 	}
 	
+
+    
 	proofBytes, err := safeProve(args[0].String())
 	if err != nil {
 		fmt.Println("safeProve Error:", err)
 		return map[string]interface{}{"error": err.Error()}
 	}
 
+    // safeProve now returns a struct with breakdown, or we need to refactor safeProve to return times. 
+    // Actually, let's keep it simple and move the logic here or refactor safeProve to return (proof, witnessTime, proofTime, error).
+    // Let's refactor safeProve to do the work and return the breakdown.
+    // Wait, I can't easily change the valid signature of safeProve if I don't change the call above.
+    // Let's assume safeProve is refactored below.
+
 	// Manual conversion to Uint8Array to avoid panic in ValueOf with []byte
-	proofJS := js.Global().Get("Uint8Array").New(len(proofBytes))
-	js.CopyBytesToJS(proofJS, proofBytes)
+	proofJS := js.Global().Get("Uint8Array").New(len(proofBytes.Proof))
+	js.CopyBytesToJS(proofJS, proofBytes.Proof)
 
 	res := js.Global().Get("Object").New()
 	res.Set("proof", proofJS)
+    res.Set("witnessTime", proofBytes.WitnessTime.Milliseconds())
+    res.Set("proofTime", proofBytes.ProofTime.Milliseconds())
 
 	return res
 }
 
-func safeProve(jsonInput string) ([]byte, error) {
+type ProofResult struct {
+    Proof []byte
+    WitnessTime time.Duration
+    ProofTime time.Duration
+}
+
+func safeProve(jsonInput string) (*ProofResult, error) {
 	fmt.Println("DEBUG: safeProve started")
 
-	// Define a DTO to safely unmarshal JSON strings
+    start := time.Now()
+
+	// 1. Witness Generation (including parsing)
 	type WitnessDTO struct {
 		InputAmount string
 		TokenParams string
@@ -235,9 +254,6 @@ func safeProve(jsonInput string) ([]byte, error) {
 	if err := json.Unmarshal([]byte(jsonInput), &dto); err != nil {
 		return nil, fmt.Errorf("JSON parse error: %v", err)
 	}
-
-	fmt.Println("DTO Unmarshaled successfully")
-    fmt.Printf("InputAmount: %s\n", dto.InputAmount)
 
     // Construct Circuit Witness
     var witness circuit.TokenTransferCircuit
@@ -273,6 +289,8 @@ func safeProve(jsonInput string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Witness creation error: %v", err)
 	}
+    
+    witnessTime := time.Since(start)
 
 	fmt.Println("Witness created successfully. Running Prove...")
 
@@ -283,11 +301,13 @@ func safeProve(jsonInput string) ([]byte, error) {
          return nil, fmt.Errorf("ProvingKey is nil! Keys not loaded.")
     }
 
-	// Prove
+	// 2. Proving
+    startProof := time.Now()
 	proof, err := groth16.Prove(ccs, pk, w)
 	if err != nil {
 		return nil, fmt.Errorf("Proving error: %v", err)
 	}
+    proofTime := time.Since(startProof)
 
 	fmt.Println("Proof generated successfully")
 
@@ -295,7 +315,11 @@ func safeProve(jsonInput string) ([]byte, error) {
 	var buf bytes.Buffer
 	proof.WriteTo(&buf)
 	
-	return buf.Bytes(), nil
+	return &ProofResult{
+        Proof: buf.Bytes(),
+        WitnessTime: witnessTime,
+        ProofTime: proofTime,
+    }, nil
 }
 
 func verify(this js.Value, args []js.Value) interface{} {

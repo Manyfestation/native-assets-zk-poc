@@ -782,8 +782,18 @@ async function runGnarkBenchmark() {
             gnarkProver = new GnarkProver();
             const initStart = performance.now();
             await gnarkProver.init();
-            log(`Gnark WASM initialized in ${formatMs(performance.now() - initStart)}`, 'gnark');
+            metrics.setupTime = performance.now() - initStart;
+            log(`Gnark WASM initialized in ${formatMs(metrics.setupTime)}`, 'gnark');
+
+            elements.gnarkSetupTime.textContent = formatMs(metrics.setupTime);
+        } else {
+            elements.gnarkSetupTime.textContent = "Cached";
         }
+
+        // Get sizes
+        const sizes = gnarkProver.getArtifactSizes();
+        elements.gnarkPkSize.textContent = formatBytes(sizes.pkSize);
+        elements.gnarkVkSize.textContent = formatBytes(sizes.vkSize);
 
         // Generate Inputs
         log('Generating inputs...', 'gnark');
@@ -797,20 +807,17 @@ async function runGnarkBenchmark() {
         const result = await gnarkProver.prove(inputs);
 
         metrics.proofTime = result.metrics.proofTime;
+        metrics.witnessTime = result.metrics.witnessTime;
         metrics.proofSize = result.metrics.proofSize;
         metrics.constraints = gnarkProver.getConstraints();
 
+        elements.gnarkWitnessTime.textContent = formatMs(metrics.witnessTime);
         elements.gnarkProofTime.textContent = formatMs(metrics.proofTime);
         elements.gnarkProofSize.textContent = formatBytes(metrics.proofSize);
 
         // Display proof as Hex
         const proofHex = Array.from(result.proof).map(b => b.toString(16).padStart(2, '0')).join('');
         elements.gnarkProofOutput.textContent = proofHex;
-
-        // Update sizes (approx, assuming loaded)
-        // In real impl we'd get them from prover
-        elements.gnarkPkSize.textContent = "Unknown";
-        elements.gnarkVkSize.textContent = "Unknown";
 
         const constraints = metrics.constraints;
         elements.gnarkConstraints.textContent = constraints ? constraints.toLocaleString() : "Unknown";

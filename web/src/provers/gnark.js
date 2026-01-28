@@ -47,6 +47,9 @@ export class GnarkProver extends BaseProver {
         const pkBytes = await this.fetchBytes(PK_URL);
         const vkBytes = await this.fetchBytes(VK_URL);
 
+        this.pkSize = pkBytes.byteLength;
+        this.vkSize = vkBytes.byteLength;
+
         const result = window.gnarkInit(pkBytes, vkBytes);
         if (result.error) {
             throw new Error(result.error);
@@ -62,7 +65,7 @@ export class GnarkProver extends BaseProver {
     }
 
     getArtifactSizes() {
-        return { pkSize: 0, vkSize: 0 };
+        return { pkSize: this.pkSize || 0, vkSize: this.vkSize || 0 };
     }
 
     getConstraints() {
@@ -162,14 +165,11 @@ export class GnarkProver extends BaseProver {
     }
 
     async prove(inputs) {
-        const witnessStart = performance.now();
-        const witnessTime = 0;
-
-        const proofStart = performance.now();
         // Go WASM prove handles witness generation too
         const inputJson = JSON.stringify(inputs);
+
+        // We rely on the WASM to return the timing breakdown
         const result = window.gnarkProve(inputJson);
-        const proofTime = performance.now() - proofStart;
 
         console.log("[Gnark] Raw WASM result:", result);
 
@@ -179,6 +179,10 @@ export class GnarkProver extends BaseProver {
 
         if (result.error) throw new Error(result.error);
 
+        // Extract metrics from WASM result if available, otherwise fallback
+        // The WASM should return "witnessTime" and "proofTime" in milliseconds
+        const witnessTime = result.witnessTime || 0;
+        const proofTime = result.proofTime || 0;
 
         return {
             proof: result.proof,
